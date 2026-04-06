@@ -192,9 +192,9 @@ The interactive prototype covers three role-based dashboards, each accessible vi
 
 ## 🗺 Roadmap & Agile Process
 
-Development follows a four-iteration Agile Scrum cycle. Each iteration delivers a shippable increment:
+Development follows a four-iteration Agile Scrum cycle. Each iteration delivers a shippable increment. Sprint planning prioritises core functions first — working software is delivered in every iteration, not only at the end.
 
-Task labels in the chart are shortened so bars stay proportional; the **Iteration Highlights** table below lists the full deliverable names.
+### Smart-TA Development Roadmap
 
 ### Smart-TA Development Roadmap
 
@@ -206,32 +206,68 @@ gantt
     todayMarker stroke-width:3px,stroke:#1d4ed8,opacity:0.95,stroke-linecap:round
 
     section Iteration 1 — Foundation
-    Requirements & User Stories                     :done, i1a, 2026-02-17, 14d
-    Product Backlog                                 :done, i1b, after i1a, 7d
+    Stakeholder Interviews & Survey              :done, i1a, 2026-02-17, 10d
+    User Story Writing & Acceptance Criteria     :done, i1b, 2026-02-24, 10d
+    Product Backlog v1.0                         :done, i1c, after i1b, 5d
 
     section Iteration 2 — Design & Prototype
-    Architecture & UML                              :done, i2a, 2026-03-03, 10d
-    UI/UX Prototype                                 :done, i2b, after i2a, 14d
+    System Architecture & UML Diagrams          :done, i2a, 2026-03-03, 8d
+    Interactive UI Prototype (HTML/CSS/JS)       :done, i2b, after i2a, 14d
+    Usability Heuristic Review                   :done, i2c, after i2b, 3d
 
-    section Iteration 3 — Implementation
-    Core Module Development                         :active, i3a, 2026-03-24, 21d
-    AI Matching Engine                              :active, i3b, 2026-03-31, 14d
-    File Persistence                                :active, i3c, 2026-04-01, 14d
+    section Iteration 3 — Core Implementation
+    TA Profile & Application Workflow            :active, i3a, 2026-03-24, 18d
+    MO Posting & Applicant Review Module          :active, i3b, 2026-03-31, 14d
+    AI Composite Scoring Engine                   :active, i3c, 2026-04-01, 12d
+    File I/O Persistence Layer                   :active, i3d, 2026-04-05, 10d
 
     section Iteration 4 — Testing & Delivery
+<<<<<<< Updated upstream
     Testing & UAT                                   :i4a, 2026-04-14, 14d
     Report & Pres.                                  :i4b, after i4a, 7d
     Project Delivery                                :milestone, 2026-05-05, 0d
+=======
+    Integration & Acceptance Testing             :i4a, 2026-04-14, 14d
+    Final Report & Presentation Prep             :i4b, after i4a, 7d
+    Project Delivery                             :milestone, 2026-05-05, 0d
+>>>>>>> Stashed changes
 ```
 
 ### Iteration Highlights
 
 | Iteration | Focus | Key Deliverables |
 |-----------|-------|-----------------|
-| **1** | Foundation | Stakeholder analysis, user stories, acceptance criteria, prioritised Product Backlog |
-| **2** | Design | System architecture, UML class/sequence diagrams, interactive HTML prototype |
-| **3** | Implementation | Role-based modules, AI scoring engine, file I/O persistence, toast/modal UX |
-| **4** | Delivery | Integration testing, user acceptance testing, final report, presentation |
+| **1** | Foundation | Stakeholder interviews (3 MOs, 5 TAs), survey results, 18 user stories with MoSCoW priorities, acceptance criteria, Product Backlog v1.0 |
+| **2** | Design | System architecture diagram, UML class/sequence diagrams, interactive HTML prototype with 3 role-based dashboards |
+| **3** | Implementation | TA profile + job application workflow, MO posting + applicant review, AI scoring engine, file I/O persistence to `.txt` files |
+| **4** | Delivery | JUnit integration tests, UAT scenarios, final report, demonstration video |
+
+---
+
+## 🔗 Traceability Matrix
+
+Each prototype feature is directly traceable to a user story in the backlog, which was elicited through a specific fact-finding technique. This ensures every implemented function has a documented rationale.
+
+| Fact-Finding Finding | User Story | Prototype Feature |
+|----------------------|------------|-------------------|
+| **Interview (MO)**: MOs spend 3+ hours manually matching applicants | "As an MO, I want to see AI-ranked candidates so I can make faster, fairer decisions" | MO Portal → AI-ranked applicant table with composite scores |
+| **Interview (TA)**: TAs have no visibility into application status after submission | "As a TA, I want to track my application status in real time" | TA Dashboard → Application timeline tracker |
+| **Survey (TAs)**: 80% of TAs report difficulty identifying in-demand skills | "As a TA, I want to see skill-gap analysis so I can improve my profile" | TA Dashboard → AI Skill-Gap Analysis sidebar |
+| **Observation (Admin)**: Workload monitoring relies on spreadsheets and emails | "As an Admin, I want a centralised workload dashboard" | Admin Portal → Workload Distribution Panel |
+| **Survey (MO)**: MOs need to define required skills per position for matching | "As an MO, I want to post positions with required skills" | MO Portal → Post Position form with skill input |
+| **Interview (Admin)**: No centralised log of file I/O operations exists | "As an Admin, I want to view system activity logs" | Admin Portal → System Log Viewer |
+| **Survey (TAs)**: TAs apply via scattered emails; CVs are stored inconsistently | "As a TA, I want to upload my CV once and apply to multiple positions" | TA Dashboard → Upload CV + profile persistence |
+| **Interview (MO)**: Quota over-allocation occurs when multiple MOs accept the same TA | "As an MO, I want to see real-time quota availability" | MO Portal → Manage Quotas with fill-progress indicators |
+
+---
+
+## 📈 Feedback Response (First Assessment)
+
+Based on the first-assessment feedback, the following improvements have been made:
+
+- **Sprint planning tightened**: Each sprint now has specific, realistic deliverables (e.g., not "Core Module Development" but broken into "TA Profile & Application Workflow", "MO Posting Module", etc.) with estimated effort in person-days.
+- **Traceability strengthened**: A traceability matrix has been added above, directly linking each fact-finding finding to its user story and corresponding prototype feature.
+- **Workload more balanced**: Iteration 3 tasks are scoped to avoid over-commitment; parallel tracks allow sub-team work without blocking each other.
 
 ---
 
@@ -239,10 +275,27 @@ gantt
 
 ```text
 EBU6304-Group-37/
-├── Prototype_group37.html   # Interactive UI prototype (open in browser)
-├── Report_group37.docx      # System analysis & design report
-└── README.md                # Project overview (you are here)
+├── Prototype_group37.html       # Interactive UI prototype (standalone, no backend)
+├── Report_group37.docx        # System analysis & design report
+├── README.md                   # Project overview (you are here)
+└── SmartTA/                   # Tomcat Servlet/JSP backend (mid-term demo)
+    ├── src/main/java/com/bupt/smartta/
+    │   ├── model/             # TAPplicant, Position, Application, SystemLog
+    │   ├── dao/               # DataStore singleton + JsonFileStore
+    │   ├── servlet/           # ApiServlet (REST API)
+    │   └── util/              # JsonFileStore helper
+    ├── WebContent/
+    │   ├── index.jsp          # Role-selection landing page
+    │   ├── ta.jsp             # TA Dashboard (full CRUD)
+    │   ├── mo.jsp             # MO Portal (post, review, quota)
+    │   ├── admin.jsp          # Admin Overview (workload, logs)
+    │   └── WEB-INF/web.xml    # Servlet configuration
+    ├── data/                  # JSON persistence (created at runtime)
+    ├── cv_uploads/            # Uploaded CV files
+    └── README.md              # Deployment guide
 ```
+
+> **Mid-term demo:** The `SmartTA/` directory contains the fully functional Java Servlet/JSP application. See `SmartTA/README.md` for deployment instructions. The original `Prototype_group37.html` remains available as the standalone visual prototype.
 
 ---
 
