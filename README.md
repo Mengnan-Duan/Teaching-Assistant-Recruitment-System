@@ -2,11 +2,12 @@
 
 # Smart-TA: AI-Powered Recruitment for BUPT
 
-**Streamlining Teaching Assistant recruitment with intelligent matching, role-based workflows, and zero-database persistence.**
+**Streamlining Teaching Assistant recruitment with intelligent matching, role-based workflows, and file-based JSON persistence (no SQL database).**
 
 [![Course](https://img.shields.io/badge/EBU6304-Software_Engineering-1d3557?style=for-the-badge&logo=bookstack&logoColor=white)](#)
 [![Group](https://img.shields.io/badge/Group-37-e63946?style=for-the-badge)](#)
 [![HTML5](https://img.shields.io/badge/Frontend-HTML5_%2F_CSS3_%2F_JS-E34F26?style=for-the-badge&logo=html5&logoColor=white)](#)
+[![Backend](https://img.shields.io/badge/Backend-Java_%7C_JSP_%7C_JSON-f89820?style=for-the-badge&logo=openjdk&logoColor=white)](#-technical-stack)
 [![License](https://img.shields.io/badge/License-MIT-2a9d8f?style=for-the-badge)](#)
 [![Build](https://img.shields.io/badge/Build-Passing-2a9d8f?style=for-the-badge&logo=githubactions&logoColor=white)](#)
 [![Agile](https://img.shields.io/badge/Methodology-Agile_Scrum-457b9d?style=for-the-badge)](#)
@@ -42,7 +43,7 @@ Traditional Teaching Assistant (TA) recruitment at BUPT suffers from fragmented 
 |-----------|-------------|
 | **Role-Based Clarity** | Dedicated dashboards for TAs, Module Organisers (MOs), and Administrators — each seeing only what they need. |
 | **AI-Assisted Decision-Making** | Composite matching scores that rank candidates by skill overlap, GPA relevance, and workload availability. |
-| **No-Database Persistence** | All data is stored via flat-file I/O (`.txt` / `.csv`), satisfying the course constraint of operating without any SQL or NoSQL database. |
+| **Zero-Database Persistence** | All data is stored as JSON files under `webapps/SmartTA/data/` via `JsonFileStore`. No SQL or NoSQL database; all persistence is real and immediate — not simulated. |
 
 This repository contains the complete deliverables for **EBU6304 Software Engineering (2025–26 Spring)**, from requirements engineering and Agile backlog planning through interactive prototyping and system architecture design.
 
@@ -62,15 +63,15 @@ Module Organisers can hover over any candidate's score to view a full **AI Expla
 ### 📊 Real-Time Workload Monitoring
 
 Administrators have a global **Workload Distribution Panel** that visualises every TA's committed hours against the 20-hour institutional cap. When a TA exceeds the limit, the system:
-1. Flags the overload with a visual warning
-2. Triggers an **AI Rebalancing Recommendation** suggesting optimal reassignments
-3. Logs the event to `workload_alerts.txt`
+1. Flags the overload with a visual warning (red bar + OVERLOAD label)
+2. Triggers an **AI Rebalancing Recommendation** — "Apply Suggestion" reduces the overloaded TA's hours by 4 via `POST /api/rebalance`
+3. Logs the event to `system_logs.json`
 
-### 🗂️ Zero-Database File Persistence
+### 🗂️ Zero-Database JSON Persistence
 
-In compliance with the course's No-DB constraint, every write operation simulates persistence to named text files (`applications_data.txt`, `positions_data.txt`, `quota_data.txt`, etc.). The Admin panel includes:
+All data is stored as JSON files under `webapps/SmartTA/data/` via `JsonFileStore`. On first startup, seed data is generated for positions, applicants, users, and applications. The Admin panel includes:
 - A **System Activity Log** viewer showing timestamped read/write events
-- A **File Storage Status** dashboard reporting the health of each data file
+- A **File Storage Status** dashboard reporting the health of each JSON data file
 
 ---
 
@@ -120,41 +121,67 @@ flowchart TD
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| **Frontend** | HTML5, CSS3 (Custom Properties), Vanilla JavaScript | Single-file prototype; no build tooling required |
-| **Typography** | Google Fonts (DM Sans, Playfair Display) | Loaded via CDN for consistent cross-browser rendering |
-| **Data Storage** | Flat-file simulation (`.txt`) | Simulated via UI feedback — no actual backend or database |
-| **AI Engine** | Simulated composite scoring | Weighted formula: `0.4 × Skill + 0.3 × GPA + 0.3 × Availability` |
+| **Frontend** | HTML5, CSS3 (Custom Properties), Vanilla JavaScript | JSP-based role dashboards; live API calls to backend |
+| **Backend** | Java Servlet (Jakarta EE 10), Apache Tomcat 10.1 | REST API via ApiServlet; session-based auth with role switching |
+| **Persistence** | JSON flat-files via JsonFileStore | Runtime data at webapps/SmartTA/data/; no SQL or NoSQL DB |
+| **AI Engine** | Composite scoring engine | Weighted formula: 0.4 Skill + 0.3 GPA + 0.3 Availability |
 | **Design System** | CSS Custom Properties (Design Tokens) | 20+ tokens for colours, spacing, shadows, and typography |
+| **Typography** | Google Fonts (DM Sans, Playfair Display) | Loaded via CDN for consistent cross-browser rendering |
 | **Methodology** | Agile Scrum (4 iterations) | Product Backlog managed in structured format |
 
-> **Why no database?** The EBU6304 course specification explicitly requires that the system operate under a **No-SQL/No-DB constraint**. All persistence is achieved through file-system I/O, which we simulate visually with save-progress bars and toast notifications referencing specific `.txt` data files.
+### Backend stack (`SmartTA/`)
+
+The deployable web application runs on **Apache Tomcat 10.1+** with **Jakarta EE 10** (`jakarta.servlet.*`, Servlet 6.0 / `web-app` 6.0). Main backend pieces:
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| **Runtime** | Apache Tomcat 10.x | Servlet container; exploded WAR under `webapps/SmartTA/` |
+| **Language** | Java | Business logic, models, JSON API |
+| **Views** | JSP (`index.jsp`, `ta.jsp`, `mo.jsp`, `admin.jsp`, `error.jsp`) | Role-based dashboards; client-side JS calls REST endpoints |
+| **REST API** | `ApiServlet` → `/api/*` | JSON over HTTP: positions, applicants, applications, logs, workloads, scoring, apply/update flows |
+| **Authentication** | `AuthServlet` → `/auth/*` | Session-based login, logout, role switching |
+| **Serialization** | Jackson (databind) | Read/write JSON for persistence and API responses |
+| **Data access** | `DataStore` + `JsonFileStore` | Singleton in-memory cache with flush to `data/*.json` |
+| **Config** | `WEB-INF/web.xml` | Servlet mappings, welcome file, error pages |
+
+> **No SQL/NoDB:** The system stores all data as JSON files via `JsonFileStore` under `webapps/SmartTA/data/`. This satisfies the EBU6304 No-DB constraint while providing real persistence — not a simulation. Each write operation (position creation, application submission, profile update) is immediately flushed to disk and reflected in subsequent reads.
 
 ---
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- A modern web browser (Chrome, Firefox, Edge, or Safari)
-- No server, package manager, or build tool required
-
-### Run the Prototype
+### Option A — Prototype (No Server)
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/your-org/EBU6304-Group-37.git
 
-# 2. Navigate into the project directory
-cd EBU6304-Group-37
-
-# 3. Open the prototype in your default browser
-#    On macOS / Linux:
-open Prototype_group37.html
-#    On Windows:
+# 2. Open the prototype in your default browser
 start Prototype_group37.html
 ```
 
-That's it — the entire prototype runs client-side with **zero dependencies**.
+Runs client-side in any modern browser. No build tooling required.
+
+### Option B — Full Application (Tomcat Backend)
+
+```bash
+# 1. Copy SmartTA/ into Tomcat webapps
+cp -r SmartTA D:\Tomcat\apache-tomcat-10.1.48\webapps\
+
+# 2. Compile the Java backend
+cd SmartTA
+javac -encoding UTF-8 -cp "D:\Tomcat\apache-tomcat-10.1.48\lib\*" -d WEB-INF/classes `
+    WEB-INF/classes/com/bupt/smartta/model/TAPplicant.java
+    WEB-INF/classes/com/bupt/smartta/model/Position.java
+    WEB-INF/classes/com/bupt/smartta/model/Application.java
+    WEB-INF/classes/com/bupt/smartta/model/SystemLog.java
+    WEB-INF/classes/com/bupt/smartta/util/JsonFileStore.java
+    WEB-INF/classes/com/bupt/smartta/util/DataStore.java
+    WEB-INF/classes/com/bupt/smartta/servlet/ApiServlet.java
+
+# 3. Restart Tomcat and open in browser
+http://localhost:8080/SmartTA/
+```
 
 ---
 
@@ -222,15 +249,9 @@ gantt
     File I/O Persistence Layer                   :active, i3d, 2026-04-05, 10d
 
     section Iteration 4 — Testing & Delivery
-<<<<<<< Updated upstream
     Testing & UAT                                   :i4a, 2026-04-14, 14d
-    Report & Pres.                                  :i4b, after i4a, 7d
-    Project Delivery                                :milestone, 2026-05-05, 0d
-=======
-    Integration & Acceptance Testing             :i4a, 2026-04-14, 14d
-    Final Report & Presentation Prep             :i4b, after i4a, 7d
-    Project Delivery                             :milestone, 2026-05-05, 0d
->>>>>>> Stashed changes
+    Report & Pres.                                   :i4b, after i4a, 7d
+    Project Delivery                                 :milestone, 2026-05-05, 0d
 ```
 
 ### Iteration Highlights
