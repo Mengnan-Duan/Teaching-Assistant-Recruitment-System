@@ -5,6 +5,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -176,13 +179,14 @@ public class JsonFileStore {
     private <T> T mapToBean(HashMap<String, Object> map, Class<T> clazz) {
         try {
             T obj = clazz.getDeclaredConstructor().newInstance();
-            for (java.lang.reflect.Field f : clazz.getDeclaredFields()) {
+            for (Field f : clazz.getDeclaredFields()) {
                 if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
                 f.setAccessible(true);
                 String name = f.getName();
                 if (!map.containsKey(name)) continue;
                 Object val = map.get(name);
                 Class<?> ft = f.getType();
+                Type gen = f.getGenericType();
                 if (val == null) {
                     if (ft == String.class) {
                         try { f.set(obj, ""); } catch (IllegalAccessException ignored) { }
@@ -207,8 +211,33 @@ public class JsonFileStore {
                     }
                 } else if (ft == ArrayList.class || ft == List.class) {
                     if (val instanceof List) {
-                        List<Object> arr = new ArrayList<>((List<?>) val);
-                        f.set(obj, arr);
+                        List<?> rawList = (List<?>) val;
+                        if (gen instanceof ParameterizedType) {
+                            Type arg0 = ((ParameterizedType) gen).getActualTypeArguments()[0];
+                            if (arg0 instanceof Class) {
+                                Class<?> elemClass = (Class<?>) arg0;
+                                List<Object> out = new ArrayList<>();
+                                for (Object item : rawList) {
+                                    if (elemClass == String.class) {
+                                        out.add(item == null ? "" : item.toString());
+                                    } else if (item instanceof HashMap) {
+                                        out.add(mapToBean((HashMap<String, Object>) item, elemClass));
+                                    } else {
+                                        out.add(item);
+                                    }
+                                }
+                                f.set(obj, out);
+                            } else {
+                                f.set(obj, new ArrayList<>(rawList));
+                            }
+                        } else {
+                            f.set(obj, new ArrayList<>(rawList));
+                        }
+                    }
+                } else if (val instanceof HashMap && !java.util.Map.class.isAssignableFrom(ft)) {
+                    if (!ft.isPrimitive() && ft != String.class && !Number.class.isAssignableFrom(ft)
+                            && ft != Boolean.class && ft != Character.class) {
+                        f.set(obj, mapToBean((HashMap<String, Object>) val, ft));
                     }
                 }
             }

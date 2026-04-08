@@ -121,10 +121,12 @@ tr:last-child td { border-bottom:none; }
 .sidebar-card { background:var(--card); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow-sm); margin-bottom:16px; }
 .sidebar-card h3 { font-size:0.92rem; font-weight:700; margin-bottom:12px; }
 
-.workload-bar-container { margin-bottom:14px; }
-.workload-label { display:flex; justify-content:space-between; font-size:0.82rem; margin-bottom:4px; }
-.workload-label strong { font-weight:600; }
-.workload-label span { color:var(--muted); }
+.workload-bar-container { margin-bottom:16px; }
+.workload-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:6px; }
+.workload-head-main { min-width:0; flex:1; }
+.workload-head-main strong { font-size:0.88rem; font-weight:700; display:block; color:var(--ink); }
+.workload-who { font-size:0.72rem; color:var(--muted); margin-top:3px; line-height:1.4; }
+.workload-hours { font-size:0.82rem; color:var(--muted); white-space:nowrap; font-weight:600; }
 .workload-bar { height:12px; background:#eee; border-radius:6px; overflow:hidden; }
 .workload-fill { height:100%; border-radius:6px; transition:width 0.5s ease; }
 .workload-fill.safe { background:var(--success); }
@@ -168,6 +170,33 @@ tr:last-child td { border-bottom:none; }
 .file-status-item code { font-family:monospace; font-size:0.82rem; }
 .file-status-item .status-ok { color:var(--success); font-weight:700; }
 .file-status-item .status-error { color:var(--accent); font-weight:700; }
+
+.dir-user-row {
+    display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+    padding:12px 0; border-bottom:1px solid var(--border); cursor:pointer;
+}
+.dir-user-row:last-child { border-bottom:none; }
+.dir-user-row:hover { background:#fafaf8; margin:0 -8px; padding-left:8px; padding-right:8px; border-radius:8px; }
+.dir-user-meta { flex:1; min-width:0; }
+.dir-user-name { font-weight:700; font-size:0.9rem; }
+.dir-user-sub { font-size:0.78rem; color:var(--muted); margin-top:2px; }
+.dir-role-pill { display:inline-block; font-size:0.68rem; font-weight:700; padding:2px 8px; border-radius:100px; margin-right:4px; margin-top:4px; }
+.dir-role-mo { background:#e3f2fd; color:#1565c0; }
+.dir-role-ta { background:var(--success-soft); color:var(--success); }
+.dir-role-admin { background:var(--accent-soft); color:var(--accent); }
+.dir-actions { display:flex; flex-wrap:wrap; gap:6px; flex-shrink:0; }
+.dir-actions button { font-size:0.72rem; padding:4px 10px; border-radius:6px; border:1.5px solid var(--border); background:#fff; cursor:pointer; font-family:var(--font-body); font-weight:600; }
+.dir-actions button:hover { border-color:var(--primary); color:var(--primary); }
+.dir-actions button.danger:hover { border-color:var(--accent); color:var(--accent); }
+
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(26,26,46,0.45); z-index:500; align-items:center; justify-content:center; padding:20px; }
+.modal-overlay.show { display:flex; }
+.modal-box { background:#fff; border-radius:var(--radius); max-width:520px; width:100%; max-height:90vh; overflow:auto; box-shadow:var(--shadow-md); padding:22px; }
+.modal-box h3 { font-size:1.05rem; margin-bottom:12px; }
+.modal-box label { display:block; font-size:0.72rem; font-weight:700; color:var(--muted); margin:10px 0 4px; }
+.modal-box input, .modal-box select, .modal-box textarea { width:100%; padding:8px 10px; border-radius:8px; border:1.5px solid var(--border); font-family:var(--font-body); font-size:0.85rem; }
+.modal-box textarea { min-height:72px; resize:vertical; }
+.modal-footer { display:flex; gap:8px; margin-top:18px; justify-content:flex-end; }
 
 .version-tag { background:var(--success-soft); color:var(--success); padding:3px 10px; border-radius:100px; font-size:0.72rem; font-weight:700; }
 
@@ -242,30 +271,15 @@ tr:last-child td { border-bottom:none; }
             </div>
             <div class="card-section">
                 <div class="section-header">
-                    <h2>File Storage Status</h2>
-                    <span class="ai-inline-badge">JSON</span>
+                    <h2>MO &amp; TA Directory</h2>
+                    <div class="section-header-actions">
+                        <span class="ai-inline-badge">MO / TA</span>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="openUserModal(null)">+ Add user</button>
+                    </div>
                 </div>
-                <div>
-                    <div class="file-status-item">
-                        <code>positions.json</code>
-                        <span class="status-ok">&#10003; OK</span>
-                    </div>
-                    <div class="file-status-item">
-                        <code>applicants.json</code>
-                        <span class="status-ok">&#10003; OK</span>
-                    </div>
-                    <div class="file-status-item">
-                        <code>applications.json</code>
-                        <span class="status-ok">&#10003; OK</span>
-                    </div>
-                    <div class="file-status-item">
-                        <code>workloads.json</code>
-                        <span class="status-ok">&#10003; OK</span>
-                    </div>
-                    <div class="file-status-item">
-                        <code>system_logs.json</code>
-                        <span class="status-ok">&#10003; OK</span>
-                    </div>
+                <p style="font-size:0.78rem;color:var(--muted);margin-bottom:12px;">Only <strong>MO</strong> and <strong>TA</strong> accounts are listed (administrators excluded). Click a row to view the profile; you can maintain accounts and linked TA applicant records.</p>
+                <div id="directoryUserList">
+                    <div style="font-size:0.78rem;color:var(--muted);padding:12px 0;">Loading directory…</div>
                 </div>
             </div>
         </div>
@@ -286,28 +300,9 @@ tr:last-child td { border-bottom:none; }
                 <div class="section-header">
                     <h2>Version History</h2>
                 </div>
-                <div>
-                    <div class="version-item">
-                        <span class="version-badge">v2.0</span>
-                        <div>
-                            <div class="version-date">2026-04-05 &mdash; Mid-Term Assessment</div>
-                            <div class="version-desc">JSON file persistence, REST API, AI scoring engine, system log viewer, Workload Monitor, MoSCoW traceability matrix</div>
-                        </div>
-                    </div>
-                    <div class="version-item">
-                        <span class="version-badge">v1.1</span>
-                        <div>
-                            <div class="version-date">2026-03-29 &mdash; Working Software v1</div>
-                            <div class="version-desc">Role-based dashboards, static data, mock file-save feedback, form validation</div>
-                        </div>
-                    </div>
-                    <div class="version-item">
-                        <span class="version-badge">v1.0</span>
-                        <div>
-                            <div class="version-date">2026-03-22 &mdash; First Assessment</div>
-                            <div class="version-desc">Product backlog, low-fidelity HTML prototype, brief report, stakeholder interviews, user stories</div>
-                        </div>
-                    </div>
+                <div id="versionHistoryList">
+                    <!-- Dynamically rendered from /api?action=config -->
+                    <div style="font-size:0.78rem;color:var(--muted);padding:8px 0;">Loading...</div>
                 </div>
             </div>
         </div>
@@ -320,7 +315,7 @@ tr:last-child td { border-bottom:none; }
             <div id="aiSuggestion" class="ai-suggestion">Loading...</div>
             <div style="display:flex;gap:8px;margin-top:14px">
                 <button class="btn btn-success" style="flex:1" onclick="applySuggestion()">Apply Suggestion</button>
-                <button class="btn btn-outline" style="flex:1" onclick="showToast('AI suggestion dismissed','warn')">Dismiss</button>
+                <button class="btn btn-outline" style="flex:1" onclick="dismissSuggestion()">Dismiss</button>
             </div>
         </div>
         <div class="sidebar-card">
@@ -346,13 +341,8 @@ tr:last-child td { border-bottom:none; }
         </div>
         <div class="sidebar-card">
             <h3>Mid-Term Demo Coverage</h3>
-            <div style="font-size:0.78rem;line-height:2;color:var(--muted)">
-                <div>&#10003; TA: profile, CV, apply, track</div>
-                <div>&#10003; MO: post job, rank, accept/reject</div>
-                <div>&#10003; Admin: workload, logs, file status</div>
-                <div>&#10003; AI: skill matching, gap analysis</div>
-                <div>&#10003; Persistence: JSON file I/O</div>
-                <div>&#10003; Traceability matrix</div>
+            <div id="featureCoverageList" style="font-size:0.78rem;line-height:2;color:var(--muted)">
+                <!-- Dynamically rendered from /api?action=config -->
             </div>
         </div>
     </div>
@@ -360,8 +350,17 @@ tr:last-child td { border-bottom:none; }
 
 <div id="toastContainer"></div>
 
+<div id="adminModalOverlay" class="modal-overlay" onclick="if(event.target===this)closeAdminModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <h3 id="adminModalTitle">User</h3>
+        <div id="adminModalBody"></div>
+        <div class="modal-footer" id="adminModalFooter"></div>
+    </div>
+</div>
+
 <script>
 let adminSession = {};
+let adminCsrfToken = null;
 
 (async function init() {
     await adminCheckSession();
@@ -375,6 +374,8 @@ async function adminCheckSession() {
         let json = await res.json();
         if (!json.authenticated) { window.location.href = "index.jsp"; return; }
         adminSession = { username: json.username, displayName: json.displayName, currentRole: json.currentRole, roles: json.roles || [] };
+        adminCsrfToken = json.csrfToken || sessionStorage.getItem("csrfToken") || "";
+        sessionStorage.setItem("csrfToken", adminCsrfToken);
         renderAdminUserInfo();
         renderAdminRoleSwitcher();
     } catch(e) { window.location.href = "index.jsp"; }
@@ -414,43 +415,373 @@ document.addEventListener("click", () => { var m = document.getElementById("admi
 
 async function adminSwitchRole(role) {
     if (role === adminSession.currentRole) return;
+    let btn = document.querySelector("[onclick='toggleAdminRoleMenu()']");
+    if (btn) btn.disabled = true;
     try {
+        let csrf = adminCsrfToken || sessionStorage.getItem("csrfToken") || "";
         let res = await fetch("auth/switchRole", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-            body: new URLSearchParams({ role: role }),
+            body: new URLSearchParams({ role: role, _csrf: csrf }),
             credentials: "same-origin"
         });
         let json = await res.json();
         if (!json.success) {
-            alert(json.error || "Cannot switch role");
+            showToast(json.error || "Cannot switch role. Please try again.", "error");
             return;
         }
         let dest = role === "TA" ? "ta.jsp" : role === "MO" ? "mo.jsp" : role === "ADMIN" ? "admin.jsp" : "index.jsp";
         window.location.href = dest;
     } catch (e) {
-        alert("Could not switch role. Please try again.");
+        showToast("Could not switch role. Please try again.", "error");
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
 async function doAdminLogout() {
     try { await fetch("auth/logout", { method: "POST" }); } catch(e) {}
+    sessionStorage.removeItem("csrfToken");
     window.location.href = "index.jsp";
 }
 
-const CAPACITY = 20;
-const OVERLOAD_THRESHOLD = 20;
+let CAPACITY = 20;
+let OVERLOAD_THRESHOLD = 20;
+
+// System config (loaded dynamically from backend)
+let systemConfig = null;
+
+// Load system config from backend
+async function loadSystemConfig() {
+    try {
+        let res = await fetch("api?action=config");
+        if (!res.ok) {
+            console.warn("[SmartTA] config request failed:", res.status);
+            return;
+        }
+        let text = await res.text();
+        try {
+            systemConfig = JSON.parse(text);
+        } catch (pe) {
+            console.warn("[SmartTA] Invalid config JSON", pe);
+            return;
+        }
+        if (systemConfig) {
+            // Apply workload constants from config
+            if (systemConfig.workloadConfig) {
+                CAPACITY = systemConfig.workloadConfig.capacity || 20;
+                OVERLOAD_THRESHOLD = systemConfig.workloadConfig.overloadThreshold || 20;
+            }
+            // Render dynamic sections
+            renderFileStatus();
+            renderVersionHistory();
+            renderFeatureCoverage();
+            // Update version badge in log count
+            let vb = document.getElementById("logCount");
+            if (vb && systemConfig.appVersion) {
+                vb.textContent = "v" + systemConfig.appVersion;
+            }
+            loadWorkload();
+        }
+    } catch(e) {
+        console.warn("[SmartTA] Failed to load system config:", e);
+    }
+}
+
+// Render file status list from backend config
+function renderFileStatus() {
+    let el = document.getElementById("fileStatusList");
+    if (!el || !systemConfig || !systemConfig.fileStatusConfig) return;
+    el.innerHTML = systemConfig.fileStatusConfig.map(function(f) {
+        return '<div class="file-status-item"><code>' + f.filename + '</code><span class="status-ok">&#10003; OK</span></div>';
+    }).join("");
+}
+
+// Render version history from backend config
+function renderVersionHistory() {
+    let el = document.getElementById("versionHistoryList");
+    if (!el || !systemConfig || !systemConfig.versionHistory) return;
+    el.innerHTML = systemConfig.versionHistory.map(function(v) {
+        return '<div class="version-item"><span class="version-badge">' + v.version + '</span>' +
+            '<div><div class="version-date">' + v.date + ' \u2014 ' + v.title + '</div>' +
+            '<div class="version-desc">' + v.description + '</div></div></div>';
+    }).join("");
+}
+
+// Render feature coverage from backend config
+function renderFeatureCoverage() {
+    let el = document.getElementById("featureCoverageList");
+    if (!el || !systemConfig || !systemConfig.featureCoverage) return;
+    el.innerHTML = systemConfig.featureCoverage.map(function(f) {
+        return '<div>' + f.icon + ' ' + f.text + '</div>';
+    }).join("");
+}
 
 async function loadAll() {
-    await Promise.all([loadWorkload(), loadRecruitment(), loadLogs()]);
+    await Promise.all([loadWorkload(), loadRecruitment(), loadLogs(), loadSystemConfig(), loadDirectoryUsers()]);
+}
+
+let directoryUsers = [];
+
+async function loadDirectoryUsers() {
+    let el = document.getElementById("directoryUserList");
+    try {
+        let res = await fetch("api?action=users", { credentials: "same-origin" });
+        if (!res.ok) {
+            if (el) el.innerHTML = '<div style="color:var(--accent);font-size:0.85rem">Could not load directory (admin session required).</div>';
+            return;
+        }
+        let json = await res.json();
+        directoryUsers = json.users || [];
+        renderDirectoryUserList();
+    } catch (e) {
+        if (el) el.innerHTML = '<div style="color:var(--accent);font-size:0.85rem">Failed to load directory.</div>';
+    }
+}
+
+function renderDirectoryUserList() {
+    let el = document.getElementById("directoryUserList");
+    if (!el) return;
+    if (!directoryUsers.length) {
+        el.innerHTML = '<div style="color:var(--muted);font-size:0.85rem">No user accounts.</div>';
+        return;
+    }
+    let html = "";
+    directoryUsers.forEach(function(u) {
+        let roles = (u.roles || []).filter(function(r) { return r !== "ADMIN"; });
+        let pills = roles.map(function(r) {
+            let c = r === "MO" ? "dir-role-mo" : "dir-role-ta";
+            return '<span class="dir-role-pill ' + c + '">' + r + '</span>';
+        }).join("");
+        let sub = (u.email || "") + (u.applicantId ? " · Applicant " + u.applicantId : "");
+        html += '<div class="dir-user-row" onclick="showUserProfileModal(\'' + escAttr(u.username) + '\')">' +
+            '<div class="dir-user-meta"><div class="dir-user-name">' + escHtml(u.displayName || u.username) + '</div>' +
+            '<div class="dir-user-sub">' + escHtml(sub) + '</div><div>' + pills + '</div></div>' +
+            '<div class="dir-actions" onclick="event.stopPropagation()">' +
+            '<button type="button" onclick="openUserModal(\'' + escAttr(u.username) + '\')">Edit</button>' +
+            '<button type="button" class="danger" onclick="deleteUserConfirm(\'' + escAttr(u.username) + '\')">Delete</button>' +
+            '</div></div>';
+    });
+    el.innerHTML = html;
+}
+
+function escHtml(s) {
+    if (!s) return "";
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function escAttr(s) {
+    if (!s) return "";
+    return String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+}
+
+function closeAdminModal() {
+    document.getElementById("adminModalOverlay").classList.remove("show");
+}
+
+function showUserProfileModal(username) {
+    let u = directoryUsers.find(function(x) { return x.username === username; });
+    if (!u) return;
+    document.getElementById("adminModalTitle").textContent = "Profile · " + (u.displayName || u.username);
+    let body = "<p style=\"font-size:0.85rem;margin-bottom:10px\"><strong>Username:</strong> " + escHtml(u.username) + "</p>";
+    body += "<p style=\"font-size:0.85rem;margin-bottom:10px\"><strong>Email:</strong> " + escHtml(u.email || "") + "</p>";
+    body += "<p style=\"font-size:0.85rem;margin-bottom:10px\"><strong>Roles:</strong> " + escHtml((u.roles || []).filter(function(r) { return r !== "ADMIN"; }).join(", ") || "—") + "</p>";
+    body += "<p style=\"font-size:0.85rem;margin-bottom:10px\"><strong>Applicant ID:</strong> " + escHtml(u.applicantId || "(none)") + "</p>";
+    if (u.applicantProfile) {
+        let p = u.applicantProfile;
+        body += "<hr style=\"border:none;border-top:1px solid var(--border);margin:14px 0\"/>";
+        body += "<p style=\"font-weight:700;font-size:0.88rem;margin-bottom:8px\">TA applicant record</p>";
+        body += "<p style=\"font-size:0.82rem;color:var(--muted)\">" + escHtml(p.yearOfStudy || "") + " · GPA " + p.gpa + " · " + (p.hoursAvailable != null ? p.hoursAvailable + "h avail" : "") + "</p>";
+        body += "<p style=\"font-size:0.82rem;margin-top:6px\">Skills: " + escHtml((p.skills || []).join(", ")) + "</p>";
+        if (p.createdAt) body += "<p style=\"font-size:0.75rem;color:var(--muted);margin-top:8px\">Record created: " + escHtml(p.createdAt) + "</p>";
+        body += "<div style=\"margin-top:12px\">" +
+            "<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"closeAdminModal();openApplicantEditModal('" + escAttr(p.id) + "')\">Edit applicant profile</button></div>";
+    } else if ((u.roles || []).indexOf("TA") >= 0) {
+        body += "<p style=\"font-size:0.78rem;color:var(--muted);margin-top:10px\">No linked applicant profile. Set Applicant ID when editing the user.</p>";
+    }
+    document.getElementById("adminModalBody").innerHTML = body;
+    document.getElementById("adminModalFooter").innerHTML = '<button type="button" class="btn btn-outline" style="color:var(--ink);border-color:var(--border)" onclick="closeAdminModal()">Close</button>' +
+        '<button type="button" class="btn btn-primary btn-sm" onclick="closeAdminModal();openUserModal(\'' + escAttr(u.username) + '\')">Edit account</button>';
+    document.getElementById("adminModalOverlay").classList.add("show");
+}
+
+function openUserModal(username) {
+    let u = username ? directoryUsers.find(function(x) { return x.username === username; }) : null;
+    document.getElementById("adminModalTitle").textContent = u ? "Edit user · " + u.username : "Create user";
+    let rolesVal = u ? (u.roles || []).join(",") : "TA";
+    let form = "";
+    if (!u) {
+        form += "<label>Username</label><input id=\"admUserUsername\" type=\"text\" autocomplete=\"off\"/>";
+        form += "<label>Password</label><input id=\"admUserPassword\" type=\"password\" autocomplete=\"new-password\"/>";
+    } else {
+        form += "<label>Username (read-only)</label><input id=\"admUserUsername\" type=\"text\" value=\"" + escHtml(u.username) + "\" readonly/>";
+        form += "<label>New password (optional)</label><input id=\"admUserPassword\" type=\"password\" autocomplete=\"new-password\" placeholder=\"Leave blank to keep\"/>";
+    }
+    form += "<label>Display name</label><input id=\"admUserDisplay\" type=\"text\" value=\"" + (u ? escHtml(u.displayName || "") : "") + "\"/>";
+    form += "<label>Email</label><input id=\"admUserEmail\" type=\"email\" value=\"" + (u ? escHtml(u.email || "") : "") + "\"/>";
+    form += "<label>Roles (comma: TA, MO, ADMIN)</label><input id=\"admUserRoles\" type=\"text\" value=\"" + escHtml(rolesVal) + "\"/>";
+    form += "<label>Linked applicant ID (TA profile, e.g. A001)</label><input id=\"admUserApplicantId\" type=\"text\" value=\"" + (u && u.applicantId ? escHtml(u.applicantId) : "") + "\" placeholder=\"Optional\"/>";
+    document.getElementById("adminModalBody").innerHTML = form;
+    let saveLabel = u ? "Save changes" : "Create user";
+    document.getElementById("adminModalFooter").innerHTML =
+        '<button type="button" class="btn btn-outline" style="color:var(--ink);border-color:var(--border)" onclick="closeAdminModal()">Cancel</button>' +
+        '<button type="button" class="btn btn-primary btn-sm" onclick="submitUserForm(' + (u ? "true" : "false") + ')">' + saveLabel + '</button>';
+    document.getElementById("adminModalOverlay").classList.add("show");
+}
+
+async function submitUserForm(isUpdate) {
+    // 必须用 x-www-form-urlencoded：multipart FormData 在未配置 @MultipartConfig 时 getParameter("op") 为 null，会报 Unknown op
+    let p = new URLSearchParams();
+    p.append("_csrf", adminCsrfToken || sessionStorage.getItem("csrfToken") || "");
+    p.append("op", isUpdate ? "update" : "create");
+    p.append("username", document.getElementById("admUserUsername").value.trim());
+    if (!isUpdate) {
+        p.append("password", document.getElementById("admUserPassword").value);
+    } else {
+        let np = document.getElementById("admUserPassword").value;
+        if (np) p.append("newPassword", np);
+    }
+    p.append("displayName", document.getElementById("admUserDisplay").value.trim());
+    p.append("email", document.getElementById("admUserEmail").value.trim());
+    p.append("roles", document.getElementById("admUserRoles").value.trim());
+    p.append("applicantId", document.getElementById("admUserApplicantId").value.trim());
+    try {
+        let res = await fetch("api/user", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p.toString(),
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if (json.success) {
+            showToast(json.message || "Saved", "success");
+            closeAdminModal();
+            await loadDirectoryUsers();
+        } else {
+            showToast(json.message || "Failed", "error");
+        }
+    } catch (e) {
+        showToast("Request failed", "error");
+    }
+}
+
+async function deleteUserConfirm(username) {
+    if (!confirm("Delete user \"" + username + "\"? This cannot be undone.")) return;
+    let p = new URLSearchParams();
+    p.append("_csrf", adminCsrfToken || sessionStorage.getItem("csrfToken") || "");
+    p.append("op", "delete");
+    p.append("username", username);
+    try {
+        let res = await fetch("api/user", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p.toString(),
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if (json.success) {
+            showToast(json.message || "Deleted", "success");
+            await loadDirectoryUsers();
+        } else {
+            showToast(json.message || "Failed", "error");
+        }
+    } catch (e) {
+        showToast("Request failed", "error");
+    }
+}
+
+function openApplicantEditModal(applicantId) {
+    let u = directoryUsers.find(function(x) { return x.applicantProfile && x.applicantProfile.id === applicantId; });
+    let p = u ? u.applicantProfile : null;
+    if (!p) {
+        showToast("Applicant not found in current directory data. Refresh and try again.", "warn");
+        return;
+    }
+    document.getElementById("adminModalTitle").textContent = "Edit applicant · " + p.id;
+    let skillsStr = (p.skills || []).join(", ");
+    let form = "<label>Name</label><input id=\"admApName\" type=\"text\" value=\"" + escHtml(p.name || "") + "\"/>";
+    form += "<label>Email</label><input id=\"admApEmail\" type=\"email\" value=\"" + escHtml(p.email || "") + "\"/>";
+    form += "<label>Year of study</label><input id=\"admApYear\" type=\"text\" value=\"" + escHtml(p.yearOfStudy || "") + "\"/>";
+    form += "<label>GPA</label><input id=\"admApGpa\" type=\"text\" value=\"" + (p.gpa != null ? p.gpa : "") + "\"/>";
+    form += "<label>Hours available / week</label><input id=\"admApHours\" type=\"number\" value=\"" + (p.hoursAvailable != null ? p.hoursAvailable : "") + "\"/>";
+    form += "<label>Skills (comma-separated)</label><textarea id=\"admApSkills\">" + escHtml(skillsStr) + "</textarea>";
+    form += "<p style=\"font-size:0.72rem;color:var(--muted);margin-top:10px\">Deleting removes this applicant and all their applications (only if no user account links this ID).</p>";
+    document.getElementById("adminModalBody").innerHTML = form;
+    document.getElementById("adminModalFooter").innerHTML =
+        '<button type="button" class="btn btn-outline danger" style="border-color:var(--accent);color:var(--accent)" onclick="deleteApplicantConfirm(\'' + escAttr(p.id) + '\')">Delete applicant</button>' +
+        '<button type="button" class="btn btn-primary btn-sm" onclick="submitApplicantForm(\'' + escAttr(p.id) + '\')">Save profile</button>';
+    document.getElementById("adminModalOverlay").classList.add("show");
+}
+
+async function submitApplicantForm(applicantId) {
+    let p = new URLSearchParams();
+    p.append("_csrf", adminCsrfToken || sessionStorage.getItem("csrfToken") || "");
+    p.append("op", "update");
+    p.append("applicantId", applicantId);
+    p.append("name", document.getElementById("admApName").value.trim());
+    p.append("email", document.getElementById("admApEmail").value.trim());
+    p.append("yearOfStudy", document.getElementById("admApYear").value.trim());
+    p.append("gpa", document.getElementById("admApGpa").value.trim());
+    p.append("hoursAvailable", document.getElementById("admApHours").value.trim());
+    p.append("skills", document.getElementById("admApSkills").value.trim());
+    try {
+        let res = await fetch("api/adminApplicant", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p.toString(),
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if (json.success) {
+            showToast(json.message || "Saved", "success");
+            closeAdminModal();
+            await Promise.all([loadDirectoryUsers(), loadRecruitment()]);
+        } else {
+            showToast(json.message || "Failed", "error");
+        }
+    } catch (e) {
+        showToast("Request failed", "error");
+    }
+}
+
+async function deleteApplicantConfirm(applicantId) {
+    if (!confirm("Delete applicant " + applicantId + " and all their applications?")) return;
+    let p = new URLSearchParams();
+    p.append("_csrf", adminCsrfToken || sessionStorage.getItem("csrfToken") || "");
+    p.append("op", "delete");
+    p.append("applicantId", applicantId);
+    try {
+        let res = await fetch("api/adminApplicant", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p.toString(),
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if (json.success) {
+            showToast(json.message || "Deleted", "success");
+            closeAdminModal();
+            await Promise.all([loadDirectoryUsers(), loadRecruitment()]);
+        } else {
+            showToast(json.message || "Failed", "error");
+        }
+    } catch (e) {
+        showToast("Request failed", "error");
+    }
 }
 
 async function loadWorkload() {
     try {
         let res = await fetch("api/workloads");
         let json = await res.json();
-        renderWorkload(json.workloads || {});
-        renderAiSuggestion(json.workloads || {});
+        let entries = json.workloadEntries;
+        if (!entries || !entries.length) {
+            let w = json.workloads || {};
+            entries = Object.keys(w).map(function(k) {
+                return { applicantId: k, username: "", taName: k, hours: w[k] };
+            });
+        }
+        renderWorkload(entries);
+        renderAiSuggestion(entries);
     } catch(e) { console.error(e); }
 }
 
@@ -473,24 +804,34 @@ async function loadLogs() {
     } catch(e) { console.error(e); }
 }
 
-function renderWorkload(workloads) {
+function renderWorkload(entries) {
     let container = document.getElementById("workloadBars");
-    let names = Object.keys(workloads);
-    let overloadCount = names.filter(n => workloads[n] > OVERLOAD_THRESHOLD).length;
+    let overloadCount = entries.filter(function(e) { return (e.hours || 0) > OVERLOAD_THRESHOLD; }).length;
     document.getElementById("overloadCount").textContent = overloadCount + " Overloaded";
-    if (!names.length) {
-        container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">No workload data available.</p>';
+    if (!entries.length) {
+        container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">No workload data (no TA accounts linked to an applicant ID).</p>';
         return;
     }
-    container.innerHTML = names.map(name => {
-        let hours = workloads[name];
+    container.innerHTML = entries.map(function(e) {
+        let hours = e.hours != null ? e.hours : 0;
+        let taName = (e.taName && String(e.taName).trim()) ? String(e.taName).trim() : "";
+        let appId = e.applicantId || "";
+        let uname = (e.username && String(e.username).trim()) ? String(e.username).trim() : "";
+        let titleUser = uname ? ("@" + uname) : (taName || (appId ? appId : "Unknown"));
         let pct = Math.min((hours / CAPACITY) * 100, 100);
         let fillClass = hours > OVERLOAD_THRESHOLD ? "danger" : hours >= 16 ? "warn" : "safe";
-        let overloadNote = hours > OVERLOAD_THRESHOLD ? `<span style="color:var(--accent);font-size:0.75rem;margin-left:8px">&#9888; OVERLOAD</span>` : "";
+        let overloadNote = hours > OVERLOAD_THRESHOLD ? " &#9888; OVERLOAD" : "";
+        let whoParts = [];
+        if (taName) whoParts.push(taName);
+        whoParts.push("Applicant " + appId);
+        let whoLine = whoParts.join(" · ");
         return `<div class="workload-bar-container">
-            <div class="workload-label">
-                <strong>${name}</strong>
-                <span>${hours}h / ${CAPACITY}h${overloadNote}</span>
+            <div class="workload-head">
+                <div class="workload-head-main">
+                    <strong>TA workload · ${escHtml(titleUser)}</strong>
+                    <div class="workload-who">${escHtml(whoLine)}</div>
+                </div>
+                <div class="workload-hours">${hours}h / ${CAPACITY}h${overloadNote}</div>
             </div>
             <div class="workload-bar">
                 <div class="workload-fill ${fillClass}" style="width:${pct}%"></div>
@@ -499,15 +840,18 @@ function renderWorkload(workloads) {
     }).join("");
 }
 
-function renderAiSuggestion(workloads) {
+function renderAiSuggestion(entries) {
     let container = document.getElementById("aiSuggestion");
-    let overloaded = Object.entries(workloads).filter(([,h]) => h > OVERLOAD_THRESHOLD);
+    let overloaded = entries.filter(function(e) { return (e.hours || 0) > OVERLOAD_THRESHOLD; });
     if (!overloaded.length) {
         container.innerHTML = "<strong>All TAs within safe workload range.</strong><br/>No rebalancing needed at this time.";
         document.getElementById("aiBalancerPanel").classList.remove("green");
         document.getElementById("aiBalancerPanel").style.background = "linear-gradient(135deg,#264653,#2a9d8f)";
     } else {
-        let names = overloaded.map(([n,h]) => `${n} (${h}h)`).join(", ");
+        let names = overloaded.map(function(e) {
+            let u = (e.username && String(e.username).trim()) ? "@" + e.username : (e.taName || e.applicantId);
+            return u + " (" + e.hours + "h)";
+        }).join(", ");
         container.innerHTML = `<strong>Issue detected:</strong> ${names} exceed the ${CAPACITY}-hour limit.<br/><br/>
             <strong>Suggestion:</strong> Reassign one module from the overloaded TA to another with lower workload.<br/><br/>
             <strong>Impact:</strong> All TAs within safe range after reassignment.`;
@@ -561,14 +905,31 @@ function renderLogs(logs) {
 }
 
 function applySuggestion() {
-    fetch("api/rebalance", { method: "POST" })
+    if (!confirm("Are you sure you want to apply the AI workload rebalancing suggestion?")) return;
+    let btn = document.querySelector(".ai-panel .btn-success");
+    if (btn) btn.disabled = true;
+    let p = new URLSearchParams();
+    p.append("_csrf", adminCsrfToken || sessionStorage.getItem("csrfToken") || "");
+    fetch("api/rebalance", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body: p.toString(),
+        credentials: "same-origin"
+    })
         .then(r => r.json())
         .then(json => {
-            if (json.success) showToast(json.message, "success");
+            if (json.success) showToast(json.message || "Workload rebalanced successfully!", "success");
             else showToast(json.message || "Rebalance failed", "error");
         })
         .catch(e => showToast("Error: " + e.message, "error"))
-        .finally(() => loadWorkload());
+        .finally(() => {
+            if (btn) btn.disabled = false;
+            loadWorkload();
+        });
+}
+
+function dismissSuggestion() {
+    showToast("AI suggestion dismissed", "info");
 }
 
 function showToast(msg, type) {

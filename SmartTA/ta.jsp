@@ -162,6 +162,12 @@ a { color:var(--primary); text-decoration:none; }
 .btn-sm { padding:5px 12px; font-size:0.78rem; }
 .btn-success { background:var(--success); color:#fff; border-color:var(--success); }
 .btn-danger { background:var(--accent); color:#fff; border-color:var(--accent); }
+.skill-suggestion-btn {
+    padding:6px 14px; border:1.5px dashed var(--border); border-radius:100px;
+    background:#fff; color:var(--primary); font-size:0.78rem; font-weight:500;
+    cursor:pointer; transition:var(--transition);
+}
+.skill-suggestion-btn:hover { background:var(--primary-soft); border-color:var(--primary); }
 
 .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .form-group { display:flex; flex-direction:column; gap:6px; }
@@ -343,7 +349,8 @@ textarea { resize:vertical; min-height:80px; }
         </div>
         <div class="sidebar-card">
             <h3>Data Traceability</h3>
-            <div style="font-size:0.78rem;color:var(--muted);line-height:2">
+            <div id="dataTraceInfo" style="font-size:0.78rem;color:var(--muted);line-height:2">
+                <!-- Loaded from backend /api?action=config -->
                 <div>&#9679; Positions: <code>positions.json</code></div>
                 <div>&#9679; Applications: <code>applications.json</code></div>
                 <div>&#9679; Profile: <code>applicants.json</code></div>
@@ -363,9 +370,11 @@ textarea { resize:vertical; min-height:80px; }
 
 <script>
 let state = {
+    csrfToken: null,
     positions: [], applications: [], applicant: null,
     session: { username: null, displayName: null, email: null, currentRole: null, roles: [] },
-    applicantId: null
+    applicantId: null,
+    skillSuggestions: []
 };
 
 function syntheticApplicant() {
@@ -398,10 +407,31 @@ function profileEmailMerged(a) {
 (async function init() {
     await checkSession();
     if (!state.session.username) return;
-    await Promise.all([loadPositions(), loadApplications(), loadApplicant()]);
+    await Promise.all([loadPositions(), loadApplications(), loadApplicant(), loadSystemConfig()]);
     renderSkillsGap();
     renderStats();
 })();
+
+// Load system config (skill suggestions, data traceability) from backend
+async function loadSystemConfig() {
+    try {
+        let res = await fetch("api?action=config");
+        if (res.ok) {
+            let cfg = await res.json();
+            if (cfg.skillSuggestions) state.skillSuggestions = cfg.skillSuggestions;
+            // Render data traceability if element exists
+            let dtEl = document.getElementById("dataTraceInfo");
+            if (dtEl && cfg.dataTraceability) {
+                dtEl.innerHTML = '<div>&#9679; Positions: <code>' + cfg.dataTraceability.positions + '</code></div>' +
+                    '<div>&#9679; Applications: <code>' + cfg.dataTraceability.applications + '</code></div>' +
+                    '<div>&#9679; Profile: <code>' + cfg.dataTraceability.applicants + '</code></div>' +
+                    '<div>&#9679; CVs: <code>' + cfg.dataTraceability.cvs + '</code></div>';
+            }
+        }
+    } catch(e) {
+        console.warn("[SmartTA] Failed to load system config:", e);
+    }
+}
 
 async function checkSession() {
     try {
@@ -418,6 +448,8 @@ async function checkSession() {
             currentRole: json.currentRole,
             roles: json.roles || []
         };
+        state.csrfToken = json.csrfToken || sessionStorage.getItem("csrfToken") || "";
+        sessionStorage.setItem("csrfToken", state.csrfToken);
         state.applicantId = json.applicantId || null;
         if (!state.applicantId) await loadApplicantIdFromUsersApi();
         renderRoleSwitcher();
@@ -485,22 +517,27 @@ document.addEventListener("click", () => {
 
 async function switchRole(role) {
     if (role === state.session.currentRole) return;
+    let btn = document.getElementById("roleSwitchBtn");
+    if (btn) btn.disabled = true;
     try {
+        let csrf = state.csrfToken || sessionStorage.getItem("csrfToken") || "";
         let res = await fetch("auth/switchRole", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-            body: new URLSearchParams({ role: role }),
+            body: new URLSearchParams({ role: role, _csrf: csrf }),
             credentials: "same-origin"
         });
         let json = await res.json();
         if (!json.success) {
-            alert(json.error || "Cannot switch role");
+            showToast(json.error || "Cannot switch role. Please try again.", "error");
             return;
         }
         let dest = role === "TA" ? "ta.jsp" : role === "MO" ? "mo.jsp" : role === "ADMIN" ? "admin.jsp" : "index.jsp";
         window.location.href = dest;
     } catch (e) {
-        alert("Could not switch role. Please try again.");
+        showToast("Could not switch role. Please try again.", "error");
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
@@ -508,6 +545,7 @@ async function doLogout() {
     try {
         await fetch("auth/logout", { method: "POST" });
     } catch(e) {}
+    sessionStorage.removeItem("csrfToken");
     window.location.href = "index.jsp";
 }
 
@@ -723,8 +761,12 @@ function buildTimeline(status) {
 
 async function applyPosition(code, name) {
     if (!state.applicantId) { showToast("Please set up your profile first", "error"); return; }
+    let btn = event.target.closest('button');
+    let originalText = btn ? btn.textContent : "Apply";
+    if (btn) { btn.disabled = true; btn.textContent = "Applying..."; }
     try {
         let p = new URLSearchParams();
+        p.append("_csrf", state.csrfToken);
         p.append("applicantId", state.applicantId);
         p.append("positionCode", code);
         p.append("applicantName", state.applicant ? state.applicant.name : state.session.displayName || "Unknown");
@@ -736,21 +778,26 @@ async function applyPosition(code, name) {
         });
         let json = await res.json();
         if (json.success) {
-            showToast("Application submitted for " + code + "! Saved to applications.json", "success");
+            showToast("Application submitted for " + code + " — now under review", "success");
             await loadApplications();
             await loadPositions();
+            renderSkillsGap();
         } else {
-            showToast(json.message || "Failed to apply", "error");
+            showToast(json.message || json.error || "Failed to apply", "error");
         }
     } catch(e) { showToast("Error: " + e.message, "error"); }
+    finally {
+        if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    }
 }
 
 async function removeSkill(skill) {
     if (!state.applicant) return;
     let skills = (state.applicant.skills || []).filter(s => s !== skill);
     let p = new URLSearchParams();
-    if (state.applicantId) p.append("applicantId", state.applicantId);
-    p.append("name", state.applicant.name || state.session.displayName || "");
+        p.append("_csrf", state.csrfToken);
+        if (state.applicantId) p.append("applicantId", state.applicantId);
+        p.append("name", state.applicant.name || state.session.displayName || "");
     p.append("email", state.applicant.email || state.session.email || "");
     p.append("yearOfStudy", state.applicant.yearOfStudy || "");
     p.append("gpa", state.applicant.gpa != null ? String(state.applicant.gpa) : "");
@@ -771,14 +818,58 @@ async function removeSkill(skill) {
 }
 
 async function addSkillPrompt() {
-    let skill = prompt("Enter a new skill:");
-    if (!skill || !skill.trim()) return;
-    skill = skill.trim();
+    if (!state.applicant) {
+        showToast("Please set up your profile first", "error");
+        return;
+    }
+    let a = state.applicant || syntheticApplicant();
+    let currentSkills = a.skills || [];
+    let suggestions = state.skillSuggestions.length > 0 ? state.skillSuggestions
+        : ["Java", "Python", "JavaScript", "Git", "Agile", "SQL", "React", "Node.js", "Machine Learning", "Data Analysis"];
+    let availableSuggestions = suggestions.filter(s => !currentSkills.includes(s));
+
+    let suggestionsHtml = availableSuggestions.slice(0, 6).map(s =>
+        `<button type="button" class="skill-suggestion-btn" onclick="addSkillFromSuggestion('${s}')">+ ${s}</button>`
+    ).join("");
+
+    let html = `
+        <div style="margin-bottom:16px">
+            <label style="font-size:0.82rem;font-weight:600;margin-bottom:8px;display:block;">Enter Skill Name</label>
+            <input type="text" id="newSkillInput" placeholder="e.g. Python, React, Git..."
+                   style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewSkill();}" />
+        </div>
+        ${suggestionsHtml ? `<div style="margin-bottom:16px"><label style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;display:block;">Quick Add:</label><div style="display:flex;flex-wrap:wrap;gap:6px">${suggestionsHtml}</div></div>` : ''}
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="submitNewSkill()">Add Skill</button>
+        </div>`;
+    openModal("Add New Skill", html);
+    setTimeout(() => { let input = document.getElementById("newSkillInput"); if(input) input.focus(); }, 100);
+}
+
+async function submitNewSkill() {
+    let skill = document.getElementById("newSkillInput").value.trim();
+    if (!skill) {
+        showToast("Please enter a skill name", "warn");
+        return;
+    }
+    closeModal();
+    await doAddSkill(skill);
+}
+
+async function addSkillFromSuggestion(skill) {
+    closeModal();
+    await doAddSkill(skill);
+}
+
+async function doAddSkill(skill) {
     if (!state.applicant) return;
     let skills = [...(state.applicant.skills||[]), skill];
     let p = new URLSearchParams();
-    if (state.applicantId) p.append("applicantId", state.applicantId);
-    p.append("name", state.applicant.name || state.session.displayName || "");
+        p.append("_csrf", state.csrfToken);
+        if (state.applicantId) p.append("applicantId", state.applicantId);
+        p.append("name", state.applicant.name || state.session.displayName || "");
     p.append("email", state.applicant.email || state.session.email || "");
     p.append("yearOfStudy", state.applicant.yearOfStudy || "");
     p.append("gpa", state.applicant.gpa != null ? String(state.applicant.gpa) : "");
@@ -791,7 +882,7 @@ async function addSkillPrompt() {
             body: p,
             credentials: "same-origin"
         });
-        showToast("Skill \"" + skill + "\" added! Saved to applicants.json", "success");
+        showToast("Skill \"" + skill + "\" added successfully", "success");
         await loadApplicant();
         await loadPositions();
         renderSkillsGap();
@@ -829,7 +920,14 @@ function openProfileModal() {
 
 async function saveProfile() {
     let a = state.applicant || syntheticApplicant();
+    let saveBtn = null;
+    let modalBody = document.getElementById("modalBody");
+    if (modalBody) {
+        saveBtn = modalBody.querySelector(".btn-primary");
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Saving..."; }
+    }
     let p = new URLSearchParams();
+    p.append("_csrf", state.csrfToken);
     if (state.applicantId) p.append("applicantId", state.applicantId);
     p.append("name", document.getElementById("editName").value.trim());
     p.append("email", document.getElementById("editEmail").value.trim());
@@ -851,12 +949,15 @@ async function saveProfile() {
         }
         if (json.applicant && json.applicant.id) state.applicantId = json.applicant.id;
         closeModal();
-        showToast("Profile saved! applicants.json updated", "success");
+        showToast("Profile saved — your AI match scores have been updated!", "success");
         await loadApplicant();
         await loadApplications();
         await loadPositions();
         renderSkillsGap();
-    } catch (e) { showToast("Error saving profile", "error"); }
+    } catch (e) { showToast("Error saving profile: " + e.message, "error"); }
+    finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save Profile"; }
+    }
 }
 
 async function openAppDetail(appId, code, status) {

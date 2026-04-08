@@ -255,7 +255,7 @@ tr:last-child td { border-bottom:none; }
                 </div>
                 <div class="file-save-bar" id="fileSaveBar">
                     <div class="file-save-spinner"></div>
-                    <span>Saving to positions.json ...</span>
+                    <span>Saving position...</span>
                 </div>
             </div>
         </div>
@@ -296,7 +296,7 @@ tr:last-child td { border-bottom:none; }
                 <div id="quotasList"></div>
                 <div class="file-save-bar" id="quotaSaveBar">
                     <div class="file-save-spinner"></div>
-                    <span>Saving to quotas.json ...</span>
+                    <span>Saving quotas...</span>
                 </div>
             </div>
         </div>
@@ -328,7 +328,8 @@ tr:last-child td { border-bottom:none; }
         </div>
         <div class="sidebar-card">
             <h3>Data Traceability</h3>
-            <div style="font-size:0.78rem;color:var(--muted);line-height:2">
+            <div id="dataTraceInfo" style="font-size:0.78rem;color:var(--muted);line-height:2">
+                <!-- Loaded from backend /api?action=config -->
                 <div>&#9679; Positions: <code>positions.json</code></div>
                 <div>&#9679; Applications: <code>applications.json</code></div>
                 <div>&#9679; Quotas: <code>quotas.json</code></div>
@@ -346,13 +347,71 @@ tr:last-child td { border-bottom:none; }
 <div id="toastContainer"></div>
 
 <script>
-let moState = { positions: [], applicants: [], applications: [], session: {}, quotaChanges: {} };
+let moState = {
+    csrfToken: null,
+    positions: [], applicants: [], applications: [], session: {}, quotaChanges: {},
+    positionDefaults: null,
+    dataTraceability: null
+};
 
 (async function init() {
     await moCheckSession();
     if (!moState.session.username) return;
-    await loadAll();
+    await Promise.all([loadAll(), loadSystemConfig()]);
 })();
+
+// Load system config from backend (position defaults, data traceability)
+async function loadSystemConfig() {
+    try {
+        let res = await fetch("api?action=config");
+        if (res.ok) {
+            let cfg = await res.json();
+            moState.positionDefaults = cfg.positionDefaults || {};
+            moState.dataTraceability = cfg.dataTraceability || {};
+            applyPositionDefaults();
+            renderDataTrace();
+        }
+    } catch(e) {
+        console.warn("[SmartTA] Failed to load system config:", e);
+    }
+}
+
+function applyPositionDefaults() {
+    let pd = moState.positionDefaults;
+    if (!pd) return;
+    let deadlineEl = document.getElementById("posDeadline");
+    let hoursEl = document.getElementById("posHours");
+    let slotsEl = document.getElementById("posSlots");
+    let postedByEl = document.getElementById("posPostedBy");
+    if (deadlineEl && pd.defaultDeadline) deadlineEl.value = pd.defaultDeadline;
+    if (hoursEl && pd.defaultHours) {
+        let opt = hoursEl.querySelector("option[value='" + pd.defaultHours + "']");
+        if (opt) { hoursEl.value = pd.defaultHours; } else {
+            // Add option if not present
+            let o = document.createElement("option");
+            o.value = pd.defaultHours; o.text = pd.defaultHours;
+            hoursEl.appendChild(o); hoursEl.value = pd.defaultHours;
+        }
+    }
+    if (slotsEl && pd.defaultSlots) {
+        let opt = slotsEl.querySelector("option[value='" + pd.defaultSlots + "']");
+        if (opt) { slotsEl.value = pd.defaultSlots; } else {
+            let o = document.createElement("option");
+            o.value = pd.defaultSlots; o.text = pd.defaultSlots;
+            slotsEl.appendChild(o); slotsEl.value = pd.defaultSlots;
+        }
+    }
+    if (postedByEl && pd.defaultPostedBy) postedByEl.placeholder = pd.defaultPostedBy;
+}
+
+function renderDataTrace() {
+    let dt = moState.dataTraceability;
+    let el = document.getElementById("dataTraceInfo");
+    if (!el || !dt) return;
+    el.innerHTML = '<div>&#9679; Positions: <code>' + (dt.positions || 'positions.json') + '</code></div>' +
+        '<div>&#9679; Applications: <code>' + (dt.applications || 'applications.json') + '</code></div>' +
+        '<div>&#9679; Quotas: <code>quotas.json</code></div>';
+}
 
 async function moCheckSession() {
     try {
@@ -365,6 +424,8 @@ async function moCheckSession() {
             currentRole: json.currentRole,
             roles: json.roles || []
         };
+        moState.csrfToken = json.csrfToken || sessionStorage.getItem("csrfToken") || "";
+        sessionStorage.setItem("csrfToken", moState.csrfToken);
         renderMoUserInfo();
         renderMoRoleSwitcher();
     } catch(e) { window.location.href = "index.jsp"; }
@@ -410,27 +471,33 @@ document.addEventListener("click", () => { var m = document.getElementById("moRo
 
 async function moSwitchRole(role) {
     if (role === moState.session.currentRole) return;
+    let btn = document.getElementById("moRoleSwitchBtn");
+    if (btn) btn.disabled = true;
     try {
+        let csrf = moState.csrfToken || sessionStorage.getItem("csrfToken") || "";
         let res = await fetch("auth/switchRole", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-            body: new URLSearchParams({ role: role }),
+            body: new URLSearchParams({ role: role, _csrf: csrf }),
             credentials: "same-origin"
         });
         let json = await res.json();
         if (!json.success) {
-            alert(json.error || "Cannot switch role");
+            showToast(json.error || "Cannot switch role. Please try again.", "error");
             return;
         }
         let dest = role === "TA" ? "ta.jsp" : role === "MO" ? "mo.jsp" : role === "ADMIN" ? "admin.jsp" : "index.jsp";
         window.location.href = dest;
     } catch (e) {
-        alert("Could not switch role. Please try again.");
+        showToast("Could not switch role. Please try again.", "error");
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
 async function doMoLogout() {
     try { await fetch("auth/logout", { method: "POST" }); } catch(e) {}
+    sessionStorage.removeItem("csrfToken");
     window.location.href = "index.jsp";
 }
 
@@ -556,52 +623,83 @@ async function publishPosition() {
     if (!code || !name || !skills) {
         showToast("Please fill in code, name, and required skills", "error"); return;
     }
+    if (!confirm("Are you sure you want to publish this position?")) return;
+
     let bar = document.getElementById("fileSaveBar");
     bar.classList.add("active");
+    let submitBtn = document.querySelector("#content-post .btn-primary");
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Publishing..."; }
+
     try {
-        let fd = new FormData();
-        fd.append("code", code); fd.append("name", name); fd.append("requiredSkills", skills);
-        fd.append("hoursPerWeek", hours); fd.append("totalSlots", slots);
-        fd.append("deadline", deadline); fd.append("postedBy", postedBy || "Dr. J. Smith");
-        fd.append("description", desc);
-        let res = await fetch("api/position", { method:"POST", body:fd });
+        let p = new URLSearchParams();
+        p.append("_csrf", moState.csrfToken);
+        p.append("code", code); p.append("name", name); p.append("requiredSkills", skills);
+        p.append("hoursPerWeek", hours); p.append("totalSlots", slots);
+        p.append("deadline", deadline); p.append("postedBy", postedBy || (moState.positionDefaults && moState.positionDefaults.defaultPostedBy) || "MO");
+        p.append("description", desc);
+        let res = await fetch("api/position", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p.toString(),
+            credentials: "same-origin"
+        });
         let json = await res.json();
         bar.classList.remove("active");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Publish Position"; }
         if (json.success) {
-            showToast("Position " + code + " published! positions.json updated", "success");
+            showToast("Position " + code + " published successfully!", "success");
             await loadAll();
             document.getElementById("posCode").value = "";
             document.getElementById("posName").value = "";
             document.getElementById("posSkills").value = "";
             document.getElementById("posDesc").value = "";
         } else {
-            showToast(json.message || "Failed to publish", "error");
+            showToast(json.message || json.error || "Failed to publish", "error");
         }
     } catch(e) {
         bar.classList.remove("active");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Publish Position"; }
         showToast("Error: " + e.message, "error");
     }
 }
 
 function saveDraft() {
-    showToast("Draft saved to drafts.json", "info");
+    showToast("Draft saved successfully", "info");
 }
 
 async function updateStatus(appId, status) {
+    let confirmMsg = status === "Accepted"
+        ? "Are you sure you want to accept this applicant?"
+        : "Are you sure you want to reject this applicant?";
+    if (!confirm(confirmMsg)) return;
+    let btnGroup = event.target.closest("td");
+    if (btnGroup) {
+        let btns = btnGroup.querySelectorAll("button");
+        btns.forEach(b => { b.disabled = true; b.textContent = "..."; });
+    }
     try {
-        let fd = new FormData();
-        fd.append("applicationId", appId);
-        fd.append("status", status);
-        let res = await fetch("api/updateStatus", { method:"POST", body:fd });
+        let p = new URLSearchParams();
+        p.append("_csrf", moState.csrfToken);
+        p.append("applicationId", appId);
+        p.append("status", status);
+        let res = await fetch("api/updateStatus", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p.toString(),
+            credentials: "same-origin"
+        });
         let json = await res.json();
         if (json.success) {
-            showToast("Application " + status.toLowerCase() + "! applications.json updated", "success");
+            showToast("Application " + status.toLowerCase() + " successfully!", "success");
             await loadAll();
-            renderApplicantTable();
         } else {
             showToast(json.message || "Failed to update", "error");
+            await loadAll();
         }
-    } catch(e) { showToast("Error: " + e.message, "error"); }
+    } catch(e) {
+        showToast("Error: " + e.message, "error");
+        await loadAll();
+    }
 }
 
 function renderQuotas() {
@@ -648,17 +746,23 @@ async function saveQuotas() {
     let saved = 0, failed = 0;
     try {
         for (let [code, totalSlots] of Object.entries(moState.quotaChanges)) {
-            let fd = new FormData();
-            fd.append("positionCode", code);
-            fd.append("totalSlots", totalSlots);
-            let res = await fetch("api/quota", { method: "POST", body: fd });
+            let p = new URLSearchParams();
+            p.append("_csrf", moState.csrfToken);
+            p.append("positionCode", code);
+            p.append("totalSlots", totalSlots);
+            let res = await fetch("api/quota", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+                body: p.toString(),
+                credentials: "same-origin"
+            });
             let json = await res.json();
             if (json.success) saved++;
             else failed++;
         }
         bar.classList.remove("active");
         if (failed === 0) {
-            showToast("All quota changes saved! positions.json updated", "success");
+            showToast("All quota changes saved successfully!", "success");
             moState.quotaChanges = {};
             await loadAll();
             renderQuotas();

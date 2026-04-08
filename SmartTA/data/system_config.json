@@ -1,0 +1,57 @@
+{
+  "appVersion": "2.0",
+  "buildDate": "2026-04-08",
+  "demoAccounts": [
+    {"username": "admin", "password": "admin123", "role": "ADMIN", "displayName": "Administrator"},
+    {"username": "mosmith", "password": "mo123", "role": "MO", "displayName": "Dr. J. Smith"},
+    {"username": "zhangwei", "password": "ta123", "role": "TA", "displayName": "Zhang Wei"},
+    {"username": "limei", "password": "ta123", "role": "TA", "displayName": "Li Mei"}
+  ],
+  "versionHistory": [
+    {"version": "2.0", "date": "2026-04-05", "title": "Mid-Term Assessment", "description": "JSON file persistence, REST API, AI scoring engine, system log viewer, Workload Monitor, MoSCoW traceability matrix"},
+    {"version": "1.1", "date": "2026-03-29", "title": "Working Software v1", "description": "Role-based dashboards, static data, mock file-save feedback, form validation"},
+    {"version": "1.0", "date": "2026-03-22", "title": "First Assessment", "description": "Product backlog, low-fidelity HTML prototype, brief report, stakeholder interviews, user stories"}
+  ],
+  "featureCoverage": [
+    {"icon": "&#10003;", "text": "TA: profile, CV, apply, track"},
+    {"icon": "&#10003;", "text": "MO: post job, rank, accept/reject"},
+    {"icon": "&#10003;", "text": "Admin: workload, logs, file status"},
+    {"icon": "&#10003;", "text": "AI: skill matching, gap analysis"},
+    {"icon": "&#10003;", "text": "Persistence: JSON file I/O"},
+    {"icon": "&#10003;", "text": "Traceability matrix"}
+  ],
+  "fileStatusConfig": [
+    {"filename": "positions.json", "displayName": "Positions", "category": "Academic Data"},
+    {"filename": "applicants.json", "displayName": "Applicants", "category": "Academic Data"},
+    {"filename": "applications.json", "displayName": "Applications", "category": "Academic Data"},
+    {"filename": "workloads.json", "displayName": "Workloads", "category": "Academic Data"},
+    {"filename": "system_logs.json", "displayName": "System Logs", "category": "System Data"},
+    {"filename": "users.json", "displayName": "Users", "category": "System Data"},
+    {"filename": "system_config.json", "displayName": "System Config", "category": "System Data"}
+  ],
+  "workloadConfig": {
+    "capacity": 20,
+    "overloadThreshold": 20,
+    "overloadUnit": "h/week"
+  },
+  "positionDefaults": {
+    "defaultHours": 8,
+    "defaultSlots": 2,
+    "defaultDeadline": "2026-04-30",
+    "defaultPostedBy": "Dr. J. Smith"
+  },
+  "skillSuggestions": [
+    "Java", "Python", "JavaScript", "Git", "Agile", "SQL",
+    "React", "Node.js", "Machine Learning", "Data Analysis",
+    "Docker", "Linux", "TCP/IP", "CSS", "HTML"
+  ],
+  "dataTraceability": {
+    "positions": "positions.json",
+    "applications": "applications.json",
+    "applicants": "applicants.json",
+    "workloads": "workloads.json",
+    "users": "users.json",
+    "logs": "system_logs.json",
+    "cvs": "cv_uploads/"
+  }
+}
