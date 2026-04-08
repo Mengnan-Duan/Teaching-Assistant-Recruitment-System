@@ -165,10 +165,19 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
     border:2px solid var(--border); border-radius:var(--radius-sm);
     padding:14px 10px; text-align:center; cursor:pointer;
     transition:var(--transition); background:#fff;
+    position:relative;
 }
-.role-option:hover { border-color:var(--primary); }
-.role-option.selected { border-color:var(--primary); background:var(--primary-soft); }
-.role-option input[type="radio"] { display:none; }
+.role-option:hover { border-color:var(--primary); transform:translateY(-2px); box-shadow:0 4px 12px rgba(69,123,157,0.15); }
+.role-option.selected { border-color:var(--primary); background:var(--primary-soft); box-shadow:0 4px 12px rgba(69,123,157,0.2); }
+.role-option.selected::after {
+    content:""; position:absolute; top:6px; right:6px;
+    width:18px; height:18px; border-radius:50%;
+    background:var(--primary); color:#fff;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'%3E%3Cpath d='M20 6L9 17l-5-5'/%3E%3C/svg%3E");
+    background-size:12px; background-position:center; background-repeat:no-repeat;
+}
+.role-option input[type="radio"] { position:absolute; opacity:0; width:0; height:0; }
+.role-option input[type="checkbox"] { position:absolute; opacity:0; width:0; height:0; }
 .role-option-icon { font-size:1.4rem; margin-bottom:4px; }
 .role-option-name { font-size:0.78rem; font-weight:700; color:var(--ink); }
 .role-option-desc { font-size:0.65rem; color:var(--muted); margin-top:2px; }
@@ -236,7 +245,7 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 <div class="page-wrapper">
     <!-- LEFT BRAND SIDE -->
     <div class="brand-side">
-        <div class="demo-badge">v2.0</div>
+        <div class="demo-badge" id="versionBadge">v2.0</div>
         <div class="brand-logo">Smart<span>TA</span></div>
         <p class="brand-tagline">AI-Powered TA Recruitment System<br/>BUPT International School · EBU6304 Group 37</p>
 
@@ -260,7 +269,7 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
         </div>
 
         <div class="brand-footer">
-            Smart-TA v2.0 &middot; Mid-Term Demo<br/>
+            <span id="brandVersion">Smart-TA v2.0 &middot; Mid-Term Demo</span><br/>
             Data stored in: /webapps/SmartTA/data/*.json
         </div>
     </div>
@@ -394,30 +403,50 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
             <span id="footerText">Don't have an account? <a onclick="showRegister()">Register here</a></span>
         </div>
 
-        <!-- Demo accounts -->
-        <div class="demo-accounts">
+        <!-- Demo accounts (loaded from backend via /api/config) -->
+        <div class="demo-accounts" id="demoSection">
             <h4>Demo Accounts</h4>
-            <div class="demo-account">
-                <span class="demo-role">Admin</span>
-                <span class="demo-creds">admin / admin123</span>
-            </div>
-            <div class="demo-account">
-                <span class="demo-role">MO</span>
-                <span class="demo-creds">mosmith / mo123</span>
-            </div>
-            <div class="demo-account">
-                <span class="demo-role">TA</span>
-                <span class="demo-creds">zhangwei / ta123</span>
-            </div>
-            <div class="demo-account">
-                <span class="demo-role">TA</span>
-                <span class="demo-creds">limei / ta123</span>
+            <div id="demoAccountsList">
+                <div style="font-size:0.78rem;color:var(--muted);padding:8px 0;">Loading demo accounts...</div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
+// Load system config (demo accounts, version) from backend on page load
+(async function() {
+    try {
+        let res = await fetch("/SmartTA/api?action=config");
+        if (res.ok) {
+            let cfg = await res.json();
+            // Version badge
+            if (cfg.appVersion) {
+                let vb = document.getElementById("versionBadge");
+                if (vb) vb.textContent = "v" + cfg.appVersion;
+                let bv = document.getElementById("brandVersion");
+                if (bv) bv.textContent = "Smart-TA v" + cfg.appVersion + " \u00b7 Mid-Term Demo";
+            }
+            // Demo accounts
+            if (cfg.demoAccounts && cfg.demoAccounts.length > 0) {
+                let list = document.getElementById("demoAccountsList");
+                if (list) {
+                    list.innerHTML = "";
+                    cfg.demoAccounts.forEach(function(a) {
+                        let div = document.createElement("div");
+                        div.className = "demo-account";
+                        div.innerHTML = '<span class="demo-role">' + a.role + '</span>' +
+                            '<span class="demo-creds">' + a.username + ' / ' + a.password + '</span>';
+                        list.appendChild(div);
+                    });
+                }
+            }
+        }
+    } catch(e) {
+        console.warn("[SmartTA] Failed to load system config:", e);
+    }
+})();
+
 // ---- Form toggle ----
 function showLogin() {
     document.getElementById("loginForm").style.display = "flex";
@@ -452,15 +481,18 @@ function showRegister() {
     }
 })();
 
-// ---- Role selector toggle ----
+// ---- Role selector toggle (whole card clickable) ----
 document.querySelectorAll("#loginRoleSelector .role-option").forEach(el => {
-    el.addEventListener("click", () => {
+    el.addEventListener("click", (e) => {
+        e.preventDefault();
         document.querySelectorAll("#loginRoleSelector .role-option").forEach(e => e.classList.remove("selected"));
         el.classList.add("selected");
+        el.querySelector("input").checked = true;
     });
 });
 document.querySelectorAll("#regRoleSelector .role-option").forEach(el => {
-    el.addEventListener("click", () => {
+    el.addEventListener("click", (e) => {
+        e.preventDefault();
         el.classList.toggle("selected");
         el.querySelector("input").checked = el.classList.contains("selected");
     });
@@ -507,6 +539,8 @@ async function doLogin() {
         }
 
         if (json.success) {
+            // 保存 session 数据供后续页面使用
+            sessionStorage.setItem("csrfToken", json.csrfToken || "");
             // Redirect to the appropriate dashboard based on role
             let redirectUrl = "ta.jsp";
             if (role === "MO") redirectUrl = "mo.jsp";
@@ -568,12 +602,12 @@ async function doRegister() {
         }
 
         if (json.success) {
-            showError(""); // clear
-            alert("Account created successfully! Please sign in.");
-            showLogin();
+            sessionStorage.setItem("csrfToken", json.csrfToken || "");
+            showError("");
+            showToast("Account created successfully! You can now sign in.", "success");
             document.getElementById("loginUsername").value = username;
             document.getElementById("loginPassword").value = "";
-            document.getElementById("loginUsername").focus();
+            document.getElementById("loginPassword").focus();
         } else {
             showError(json.error || json.message || "Registration failed");
         }
@@ -610,6 +644,23 @@ function wirePasswordToggle(inputId, btnId) {
 }
 wirePasswordToggle("loginPassword", "loginPwToggle");
 wirePasswordToggle("regPassword", "regPwToggle");
+
+// ---- Toast ----
+var toastContainer = document.createElement("div");
+toastContainer.id = "toastContainer";
+toastContainer.style.cssText = "position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;";
+document.body.appendChild(toastContainer);
+
+function showToast(msg, type) {
+    type = type || "success";
+    var icons = { success:"&#9989;", error:"&#10060;", warn:"&#9888;&#65039;", info:"&#128712;" };
+    var toast = document.createElement("div");
+    toast.style.cssText = "display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:8px;font-size:0.85rem;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,0.15);animation:slideIn 0.25s ease;max-width:360px;background:#fff;";
+    toast.style.borderLeft = "4px solid " + ({"success":"#2a9d8f","error":"#e63946","warn":"#e9c46a","info":"#457b9d"})[type];
+    toast.innerHTML = '<span>' + icons[type] + '</span><span>' + msg + '</span><button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;margin-left:auto;color:#8d99ae;">&times;</button>';
+    toastContainer.appendChild(toast);
+    setTimeout(function() { if(toast.parentElement) toast.remove(); }, 4000);
+}
 </script>
 
 </body>

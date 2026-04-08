@@ -19,12 +19,11 @@ public class AuthServlet extends HttpServlet {
 
     private final DataStore ds = DataStore.getInstance();
 
-    /** CSRF Token 字段名 */
     private static final String CSRF_PARAM = "_csrf";
     private static final String CSRF_SESSION_ATTR = "csrfToken";
 
     /**
-     * 验证 CSRF Token。POST 请求应携带 _csrf 参数，与 session 中存储的 token 匹配。
+     * 验证 CSRF Token。
      */
     private boolean validateCsrf(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         HttpSession sess = req.getSession(false);
@@ -39,7 +38,6 @@ public class AuthServlet extends HttpServlet {
         return true;
     }
 
-    /** 密码强度正则：至少 8 位，包含字母和数字 */
     private static final Pattern PASSWORD_PATTERN =
             Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{8,}$");
 
@@ -58,20 +56,11 @@ public class AuthServlet extends HttpServlet {
         String action = path.substring(1);
 
         switch (action) {
-            case "login":
-                handleLogin(req, resp);
-                break;
-            case "register":
-                handleRegister(req, resp);
-                break;
-            case "logout":
-                handleLogout(req, resp);
-                break;
-            case "switchRole":
-                handleSwitchRole(req, resp);
-                break;
-            default:
-                sendError(resp, "Unknown action: " + action);
+            case "login":    handleLogin(req, resp);    break;
+            case "register": handleRegister(req, resp); break;
+            case "logout":   handleLogout(req, resp);   break;
+            case "switchRole": handleSwitchRole(req, resp); break;
+            default: sendError(resp, "Unknown action: " + action);
         }
     }
 
@@ -94,8 +83,6 @@ public class AuthServlet extends HttpServlet {
             sendError(resp, "Unknown action: " + action);
         }
     }
-
-    // ==================== 登录 ====================
 
     private void handleLogin(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String username = req.getParameter("username");
@@ -122,13 +109,11 @@ public class AuthServlet extends HttpServlet {
             return;
         }
 
-        // 会话固定攻击防护：登录成功后使原有 session 失效，创建新 session
+        // 会话固定攻击防护：登录成功后创建新 session
         HttpSession oldSession = req.getSession(false);
-        if (oldSession != null) {
-            oldSession.invalidate();
-        }
+        if (oldSession != null) oldSession.invalidate();
         HttpSession session = req.getSession(true);
-        session.setMaxInactiveInterval(30 * 60); // 30 分钟超时
+        session.setMaxInactiveInterval(30 * 60);
 
         if (targetRole != null && !targetRole.trim().isEmpty()) {
             String tr = targetRole.trim().toUpperCase();
@@ -158,7 +143,6 @@ public class AuthServlet extends HttpServlet {
         String email = user.getEmail() != null ? user.getEmail() : "";
         session.setAttribute("email", email);
 
-        // 生成 CSRF Token
         String csrfToken = java.util.UUID.randomUUID().toString();
         session.setAttribute(CSRF_SESSION_ATTR, csrfToken);
 
@@ -181,8 +165,6 @@ public class AuthServlet extends HttpServlet {
         resp.getWriter().write(sb.toString());
     }
 
-    // ==================== 注册 ====================
-
     private void handleRegister(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String username = req.getParameter("username");
         String password = req.getParameter("password");
@@ -200,7 +182,6 @@ public class AuthServlet extends HttpServlet {
         username = username.trim();
         displayName = displayName.trim();
 
-        // P1 修复：增强密码强度验证
         if (username.length() < 3) {
             sendError(resp, "Username must be at least 3 characters");
             return;
@@ -217,8 +198,6 @@ public class AuthServlet extends HttpServlet {
             sendError(resp, "Password is too long");
             return;
         }
-
-        // 验证用户名格式：只允许字母、数字、下划线
         if (!username.matches("^[a-zA-Z0-9_]+$")) {
             sendError(resp, "Username can only contain letters, numbers, and underscores");
             return;
@@ -238,28 +217,16 @@ public class AuthServlet extends HttpServlet {
                 }
             }
         }
+        if (roles.isEmpty()) roles.add("TA");
 
-        // 注册时默认至少分配 TA 角色
-        if (roles.isEmpty()) {
-            roles.add("TA");
-        }
-
-        User user = new User(
-            username,
-            User.hashPassword(password),
-            displayName,
-            ""
-        );
+        User user = new User(username, User.hashPassword(password), displayName, "");
         user.setEmail(email != null ? email.trim() : "");
         for (String r : roles) user.addRole(r);
 
         ds.saveUser(user);
-        if (user.hasRole("TA")) {
-            ensureTaApplicantLinked(user.getUsername());
-        }
+        if (user.hasRole("TA")) ensureTaApplicantLinked(user.getUsername());
         ds.addLog(SystemLog.OP_WRITE, "users.json", SystemLog.STATUS_OK);
 
-        // 注册后创建新 session
         HttpSession session = req.getSession(true);
         session.setMaxInactiveInterval(30 * 60);
         session.setAttribute("username", user.getUsername());
@@ -284,17 +251,11 @@ public class AuthServlet extends HttpServlet {
         resp.getWriter().write(sb.toString());
     }
 
-    // ==================== 登出 ====================
-
     private void handleLogout(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         HttpSession session = req.getSession(false);
-        if (session != null) {
-            session.invalidate();
-        }
+        if (session != null) session.invalidate();
         resp.getWriter().write("{\"success\":true,\"message\":\"Logged out successfully\"}");
     }
-
-    // ==================== 切换角色 ====================
 
     private void handleSwitchRole(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         HttpSession session = req.getSession(false);
@@ -324,10 +285,9 @@ public class AuthServlet extends HttpServlet {
 
         session.setAttribute("currentRole", targetRole);
         String csrfToken = (String) session.getAttribute(CSRF_SESSION_ATTR);
-        resp.getWriter().write("{\"success\":true,\"currentRole\":\"" + esc(targetRole) + "\",\"csrfToken\":\"" + esc(csrfToken != null ? csrfToken : "") + "\"}");
+        resp.getWriter().write("{\"success\":true,\"currentRole\":\"" + esc(targetRole)
+                + "\",\"csrfToken\":\"" + esc(csrfToken != null ? csrfToken : "") + "\"}");
     }
-
-    // ==================== 获取会话信息 ====================
 
     private void handleGetSession(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         HttpSession session = req.getSession(false);
@@ -343,9 +303,7 @@ public class AuthServlet extends HttpServlet {
 
         @SuppressWarnings("unchecked")
         Set<String> roles = (Set<String>) session.getAttribute("roles");
-        if (roles == null && user != null) {
-            roles = user.getRoles();
-        }
+        if (roles == null && user != null) roles = user.getRoles();
 
         if (user == null) {
             resp.getWriter().write("{\"authenticated\":false}");
@@ -391,8 +349,6 @@ public class AuthServlet extends HttpServlet {
         resp.getWriter().write(sb.toString());
     }
 
-    // ==================== 获取角色列表 ====================
-
     private void handleGetRoles(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         HttpSession session = req.getSession(false);
         if (session == null || session.getAttribute("username") == null) {
@@ -419,12 +375,6 @@ public class AuthServlet extends HttpServlet {
         resp.getWriter().write(sb.toString());
     }
 
-    // ==================== TA 申请者自动创建与关联 ====================
-
-    /**
-     * TA 账户自动关联或创建申请者档案。
-     * 如果用户没有 applicantId 或关联的申请者记录不存在，则创建一个空档案。
-     */
     private void ensureTaApplicantLinked(String username) {
         User user = ds.getUserByUsername(username);
         if (user == null || !user.hasRole("TA")) return;
@@ -436,9 +386,7 @@ public class AuthServlet extends HttpServlet {
             return;
         }
 
-        if (aid != null && !aid.isEmpty()) {
-            user.setApplicantId(null);
-        }
+        if (aid != null && !aid.isEmpty()) user.setApplicantId(null);
 
         String id = ds.allocateNextApplicantId();
         String nm = user.getDisplayName() != null && !user.getDisplayName().isEmpty()
@@ -450,21 +398,31 @@ public class AuthServlet extends HttpServlet {
         ds.saveUser(user);
     }
 
-    /** 同步 User 和 TAPplicant 的邮箱信息（已由 DataStore.syncUserAndApplicantEmails 统一处理，此处保留兼容）。 */
     private void syncUserApplicantContact(String username) {
-        ds.syncUserAndApplicantEmails(username);
-    }
+        User user = ds.getUserByUsername(username);
+        if (user == null || !user.hasRole("TA")) return;
+        String aid = user.getApplicantId();
+        if (aid == null || aid.isEmpty()) return;
+        TAPplicant ta = ds.getApplicantById(aid);
+        if (ta == null) return;
 
-    // ==================== 工具方法 ====================
+        String ue = user.getEmail() == null ? "" : user.getEmail().trim();
+        String ae = ta.getEmail() == null ? "" : ta.getEmail().trim();
+
+        if (!ue.isEmpty() && ae.isEmpty()) {
+            ta.setEmail(ue);
+            ds.saveApplicant(ta);
+        } else if (ue.isEmpty() && !ae.isEmpty()) {
+            user.setEmail(ae);
+            ds.saveUser(user);
+        }
+    }
 
     private void sendError(HttpServletResponse resp, String message) throws IOException {
         resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         resp.getWriter().write("{\"success\":false,\"error\":\"" + esc(message) + "\"}");
     }
 
-    /**
-     * 全面 HTML 实体转义，防止 XSS。
-     */
     private String esc(String s) {
         if (s == null) return "";
         return s.replace("&", "&amp;")

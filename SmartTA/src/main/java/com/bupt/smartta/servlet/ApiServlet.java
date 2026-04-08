@@ -20,13 +20,18 @@ public class ApiServlet extends HttpServlet {
         resp.setContentType("application/json");
         resp.setCharacterEncoding("UTF-8");
         String path = req.getPathInfo();
-
-        if (path == null || path.equals("/")) {
+        // 支持 /api/positions 与 /api?action=positions（pathInfo 可能为空）
+        String action = null;
+        if (path != null && path.length() > 1) {
+            action = path.substring(1);
+        }
+        if (action == null || action.isEmpty()) {
+            action = req.getParameter("action");
+        }
+        if (action == null || action.isEmpty()) {
             sendError(resp, "Missing action parameter");
             return;
         }
-
-        String action = path.substring(1);
         StringBuilder sb = new StringBuilder();
 
         switch (action) {
@@ -97,6 +102,9 @@ public class ApiServlet extends HttpServlet {
                 sb.append("}}");
                 break;
 
+            case "config":
+                sb.append(systemConfigToJson(ds.getSystemConfig()));
+                break;
             case "score":
                 String applicantId = req.getParameter("applicantId");
                 String posCode = req.getParameter("positionCode");
@@ -446,6 +454,102 @@ public class ApiServlet extends HttpServlet {
         sb.append("\"status\":\"").append(esc(a.getStatus())).append("\",");
         sb.append("\"aiScore\":").append(a.getAiScore()).append(",");
         sb.append("\"aiExplanation\":\"").append(esc(a.getAiExplanation())).append("\"");
+        sb.append("}");
+        return sb.toString();
+    }
+
+
+    // ---- System Config JSON Serializer ----
+
+    private String systemConfigToJson(SystemConfig cfg) {
+        if (cfg == null) return "{}";
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"appVersion\":\"").append(esc(cfg.getAppVersion())).append("\",");
+        sb.append("\"buildDate\":\"").append(esc(cfg.getBuildDate())).append("\",");
+        sb.append("\"demoAccounts\":[");
+        if (cfg.getDemoAccounts() != null) {
+            for (int i = 0; i < cfg.getDemoAccounts().size(); i++) {
+                SystemConfig.DemoAccount a = cfg.getDemoAccounts().get(i);
+                if (i > 0) sb.append(",");
+                sb.append("{");
+                sb.append("\"username\":\"").append(esc(a.getUsername())).append("\",");
+                sb.append("\"password\":\"").append(esc(a.getPassword())).append("\",");
+                sb.append("\"role\":\"").append(esc(a.getRole())).append("\",");
+                sb.append("\"displayName\":\"").append(esc(a.getDisplayName())).append("\"}");
+            }
+        }
+        sb.append("],");
+        sb.append("\"versionHistory\":[");
+        if (cfg.getVersionHistory() != null) {
+            for (int i = 0; i < cfg.getVersionHistory().size(); i++) {
+                SystemConfig.VersionEntry v = cfg.getVersionHistory().get(i);
+                if (i > 0) sb.append(",");
+                sb.append("{");
+                sb.append("\"version\":\"").append(esc(v.getVersion())).append("\",");
+                sb.append("\"date\":\"").append(esc(v.getDate())).append("\",");
+                sb.append("\"title\":\"").append(esc(v.getTitle())).append("\",");
+                sb.append("\"description\":\"").append(esc(v.getDescription())).append("\"}");
+            }
+        }
+        sb.append("],");
+        sb.append("\"featureCoverage\":[");
+        if (cfg.getFeatureCoverage() != null) {
+            for (int i = 0; i < cfg.getFeatureCoverage().size(); i++) {
+                SystemConfig.FeatureCoverage fc = cfg.getFeatureCoverage().get(i);
+                if (i > 0) sb.append(",");
+                sb.append("{");
+                sb.append("\"icon\":\"").append(esc(fc.getIcon())).append("\",");
+                sb.append("\"text\":\"").append(esc(fc.getText())).append("\"}");
+            }
+        }
+        sb.append("],");
+        sb.append("\"fileStatusConfig\":[");
+        if (cfg.getFileStatusConfig() != null) {
+            for (int i = 0; i < cfg.getFileStatusConfig().size(); i++) {
+                SystemConfig.FileStatusConfig fsc = cfg.getFileStatusConfig().get(i);
+                if (i > 0) sb.append(",");
+                sb.append("{");
+                sb.append("\"filename\":\"").append(esc(fsc.getFilename())).append("\",");
+                sb.append("\"displayName\":\"").append(esc(fsc.getDisplayName())).append("\",");
+                sb.append("\"category\":\"").append(esc(fsc.getCategory())).append("\"}");
+            }
+        }
+        sb.append("],");
+        if (cfg.getWorkloadConfig() != null) {
+            SystemConfig.WorkloadConfig wc = cfg.getWorkloadConfig();
+            sb.append("\"workloadConfig\":{");
+            sb.append("\"capacity\":").append(wc.getCapacity()).append(",");
+            sb.append("\"overloadThreshold\":").append(wc.getOverloadThreshold()).append(",");
+            sb.append("\"overloadUnit\":\"").append(esc(wc.getOverloadUnit())).append("\"},");
+        } else { sb.append("\"workloadConfig\":{},"); }
+        if (cfg.getPositionDefaults() != null) {
+            SystemConfig.PositionDefaults pd = cfg.getPositionDefaults();
+            sb.append("\"positionDefaults\":{");
+            sb.append("\"defaultHours\":").append(pd.getDefaultHours()).append(",");
+            sb.append("\"defaultSlots\":").append(pd.getDefaultSlots()).append(",");
+            sb.append("\"defaultDeadline\":\"").append(esc(pd.getDefaultDeadline())).append("\",");
+            sb.append("\"defaultPostedBy\":\"").append(esc(pd.getDefaultPostedBy())).append("\"},");
+        } else { sb.append("\"positionDefaults\":{},"); }
+        sb.append("\"skillSuggestions\":[");
+        if (cfg.getSkillSuggestions() != null) {
+            for (int i = 0; i < cfg.getSkillSuggestions().size(); i++) {
+                if (i > 0) sb.append(",");
+                sb.append("\"\"").append(esc(cfg.getSkillSuggestions().get(i))).append("\"\"");
+            }
+        }
+        sb.append("],");
+        if (cfg.getDataTraceability() != null) {
+            SystemConfig.DataTraceability dt = cfg.getDataTraceability();
+            sb.append("\"dataTraceability\":{");
+            sb.append("\"positions\":\"").append(esc(dt.getPositions())).append("\",");
+            sb.append("\"applications\":\"").append(esc(dt.getApplications())).append("\",");
+            sb.append("\"applicants\":\"").append(esc(dt.getApplicants())).append("\",");
+            sb.append("\"workloads\":\"").append(esc(dt.getWorkloads())).append("\",");
+            sb.append("\"users\":\"").append(esc(dt.getUsers())).append("\",");
+            sb.append("\"logs\":\"").append(esc(dt.getLogs())).append("\",");
+            sb.append("\"cvs\":\"").append(esc(dt.getCvs())).append("\"}");
+        } else { sb.append("\"dataTraceability\":{}"); }
         sb.append("}");
         return sb.toString();
     }
