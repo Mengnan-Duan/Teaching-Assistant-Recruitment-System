@@ -6,13 +6,6 @@
   "detail" : null,
   "opIcon" : "W"
 }, {
-  "timestamp" : "2026-04-09 16:12:34",
-  "operation" : "WRITE",
-  "fileName" : "users.json",
-  "status" : "OK",
-  "detail" : null,
-  "opIcon" : "W"
-}, {
   "timestamp" : "2026-04-08 22:43:19",
   "operation" : "WRITE",
   "fileName" : "users.json",

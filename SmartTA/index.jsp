@@ -224,6 +224,19 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 }
 .error-box.show { display:flex; align-items:center; gap:8px; }
 
+.success-box {
+    display:none; padding:12px 16px; border-radius:var(--radius-sm);
+    background:var(--success-soft); border-left:4px solid var(--success);
+    font-size:0.82rem; color:#1d6f65; font-weight:500;
+}
+.success-box.show { display:flex; align-items:center; gap:8px; }
+.success-box .success-icon {
+    flex-shrink:0; width:22px; height:22px; border-radius:50%;
+    background:var(--success); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.75rem; font-weight:800;
+}
+
 /* Demo badge */
 .demo-badge {
     position:absolute; top:16px; right:16px;
@@ -281,10 +294,14 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
             <button class="form-toggle-btn" id="btn-register" onclick="showRegister()">Register</button>
         </div>
 
-        <!-- ERROR BOX -->
+        <!-- ERROR / SUCCESS (同一位置，互斥显示) -->
         <div class="error-box" id="errorBox">
             <span>&#9888;&#65039;</span>
             <span id="errorMsg"></span>
+        </div>
+        <div class="success-box" id="successBox" aria-live="polite">
+            <span class="success-icon" aria-hidden="true">&#10003;</span>
+            <span id="successMsg"></span>
         </div>
 
         <!-- LOGIN FORM -->
@@ -363,7 +380,7 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
                 <label>Password</label>
                 <div class="field-input">
                     <span class="input-icon">&#128273;</span>
-                    <input type="password" id="regPassword" placeholder="At least 4 characters" autocomplete="new-password" />
+                    <input type="password" id="regPassword" placeholder="8+ chars, letters &amp; numbers" autocomplete="new-password" />
                     <button type="button" class="pw-toggle-btn" id="regPwToggle" aria-pressed="false" aria-label="Show password" title="Show password">
                         <svg class="pw-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                         <svg class="pw-eye-shut" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -427,7 +444,7 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
                 let bv = document.getElementById("brandVersion");
                 if (bv) bv.textContent = "Smart-TA v" + cfg.appVersion + " \u00b7 Mid-Term Demo";
             }
-            // Demo accounts
+            // P0-9: 不暴露明文密码，仅显示用户名和角色
             if (cfg.demoAccounts && cfg.demoAccounts.length > 0) {
                 let list = document.getElementById("demoAccountsList");
                 if (list) {
@@ -435,8 +452,8 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
                     cfg.demoAccounts.forEach(function(a) {
                         let div = document.createElement("div");
                         div.className = "demo-account";
-                        div.innerHTML = '<span class="demo-role">' + a.role + '</span>' +
-                            '<span class="demo-creds">' + a.username + ' / ' + a.password + '</span>';
+                        div.innerHTML = '<span class="demo-role">' + (a.role || '') + '</span>' +
+                            '<span class="demo-creds">' + (a.username || '') + '</span>';
                         list.appendChild(div);
                     });
                 }
@@ -448,13 +465,16 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 })();
 
 // ---- Form toggle ----
-function showLogin() {
+/** @param opts {{keepSuccess?:boolean}} 注册成功后切到登录页时保留绿色成功条 */
+function showLogin(opts) {
+    var keepSuccess = opts && opts.keepSuccess;
     document.getElementById("loginForm").style.display = "flex";
     document.getElementById("registerForm").style.display = "none";
     document.getElementById("btn-login").className = "form-toggle-btn active";
     document.getElementById("btn-register").className = "form-toggle-btn";
     document.getElementById("footerText").innerHTML = 'Don\'t have an account? <a onclick="showRegister()\">Register here</a>';
     hideError();
+    if (!keepSuccess) hideSuccess();
 }
 function showRegister() {
     document.getElementById("loginForm").style.display = "none";
@@ -463,6 +483,7 @@ function showRegister() {
     document.getElementById("btn-register").className = "form-toggle-btn active";
     document.getElementById("footerText").innerHTML = 'Already have an account? <a onclick="showLogin()\">Sign in</a>';
     hideError();
+    hideSuccess();
 }
 
 // Auto-select role from query param
@@ -498,18 +519,28 @@ document.querySelectorAll("#regRoleSelector .role-option").forEach(el => {
     });
 });
 
-// ---- Error ----
+// ---- Error / Success banners ----
 function showError(msg) {
+    hideSuccess();
     document.getElementById("errorMsg").textContent = msg;
     document.getElementById("errorBox").classList.add("show");
 }
 function hideError() {
     document.getElementById("errorBox").classList.remove("show");
 }
+function showSuccess(msg) {
+    hideError();
+    document.getElementById("successMsg").textContent = msg;
+    document.getElementById("successBox").classList.add("show");
+}
+function hideSuccess() {
+    document.getElementById("successBox").classList.remove("show");
+}
 
 // ---- Login ----
 async function doLogin() {
     hideError();
+    hideSuccess();
     let username = document.getElementById("loginUsername").value.trim();
     let password = document.getElementById("loginPassword").value;
     let roleEl = document.querySelector("#loginRoleSelector .role-option.selected");
@@ -560,6 +591,7 @@ async function doLogin() {
 // ---- Register ----
 async function doRegister() {
     hideError();
+    hideSuccess();
     let displayName = document.getElementById("regDisplayName").value.trim();
     let username = document.getElementById("regUsername").value.trim();
     let email = document.getElementById("regEmail").value.trim();
@@ -571,7 +603,10 @@ async function doRegister() {
     if (!username) { showError("Please enter a username"); return; }
     if (username.length < 3) { showError("Username must be at least 3 characters"); return; }
     if (!password) { showError("Please enter a password"); return; }
-    if (password.length < 4) { showError("Password must be at least 4 characters"); return; }
+    if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password)) {
+        showError("Password: at least 8 characters, with both letters and numbers");
+        return;
+    }
     if (!email) { showError("Please enter your email"); return; }
     if (roles.length === 0) { showError("Please select at least one role"); return; }
 
@@ -603,10 +638,10 @@ async function doRegister() {
 
         if (json.success) {
             sessionStorage.setItem("csrfToken", json.csrfToken || "");
-            showError("");
-            showToast("Account created successfully! You can now sign in.", "success");
+            showSuccess("Account created successfully. You can sign in below with your username.");
             document.getElementById("loginUsername").value = username;
             document.getElementById("loginPassword").value = "";
+            showLogin({ keepSuccess: true });
             document.getElementById("loginPassword").focus();
         } else {
             showError(json.error || json.message || "Registration failed");

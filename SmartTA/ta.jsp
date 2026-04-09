@@ -766,7 +766,7 @@ async function applyPosition(code, name) {
     if (btn) { btn.disabled = true; btn.textContent = "Applying..."; }
     try {
         let p = new URLSearchParams();
-        p.append("_csrf", state.csrfToken);
+        p.append("_csrf", state.csrfToken || sessionStorage.getItem("csrfToken") || "");
         p.append("applicantId", state.applicantId);
         p.append("positionCode", code);
         p.append("applicantName", state.applicant ? state.applicant.name : state.session.displayName || "Unknown");
@@ -795,9 +795,9 @@ async function removeSkill(skill) {
     if (!state.applicant) return;
     let skills = (state.applicant.skills || []).filter(s => s !== skill);
     let p = new URLSearchParams();
-        p.append("_csrf", state.csrfToken);
-        if (state.applicantId) p.append("applicantId", state.applicantId);
-        p.append("name", state.applicant.name || state.session.displayName || "");
+    p.append("_csrf", state.csrfToken || sessionStorage.getItem("csrfToken") || "");
+    if (state.applicantId) p.append("applicantId", state.applicantId);
+    p.append("name", state.applicant.name || state.session.displayName || "");
     p.append("email", state.applicant.email || state.session.email || "");
     p.append("yearOfStudy", state.applicant.yearOfStudy || "");
     p.append("gpa", state.applicant.gpa != null ? String(state.applicant.gpa) : "");
@@ -892,7 +892,51 @@ async function doAddSkill(skill) {
 function handleCVUpload(input) {
     let file = input.files[0];
     if (!file) return;
-    showToast("CV \"" + file.name + "\" saved to cv_uploads/", "success");
+    if (!state.applicantId) { showToast("Please set up your profile first", "error"); return; }
+
+    // 文件类型校验
+    let allowedTypes = ['.pdf', '.doc', '.docx'];
+    let fileName = file.name.toLowerCase();
+    let ext = fileName.lastIndexOf('.') >= 0 ? fileName.substring(fileName.lastIndexOf('.')) : '';
+    if (allowedTypes.indexOf(ext) < 0) {
+        showToast("Invalid file type. Accepted: PDF, DOC, DOCX", "error");
+        return;
+    }
+    // 文件大小校验（5MB）
+    if (file.size > 5 * 1024 * 1024) {
+        showToast("File too large. Maximum size: 5MB", "error");
+        return;
+    }
+
+    let fd = new FormData();
+    fd.append("cv", file);
+    fd.append("applicantId", state.applicantId);
+    fd.append("_csrf", state.csrfToken || sessionStorage.getItem("csrfToken") || "");
+
+    let btn = input.closest('.btn') || document.createElement('button');
+    let origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Uploading...";
+
+    fetch("/SmartTA/upload", {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin"
+    })
+    .then(r => r.json())
+    .then(json => {
+        if (json.success) {
+            showToast("CV uploaded: " + (json.originalName || file.name), "success");
+        } else {
+            showToast("Upload failed: " + (json.message || "Unknown error"), "error");
+        }
+    })
+    .catch(e => showToast("Error: " + e.message, "error"))
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = origText;
+        input.value = '';
+    });
 }
 
 function openProfileModal() {
