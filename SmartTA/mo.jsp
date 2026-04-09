@@ -632,7 +632,7 @@ async function publishPosition() {
 
     try {
         let p = new URLSearchParams();
-        p.append("_csrf", moState.csrfToken);
+        p.append("_csrf", moState.csrfToken || sessionStorage.getItem("csrfToken") || "");
         p.append("code", code); p.append("name", name); p.append("requiredSkills", skills);
         p.append("hoursPerWeek", hours); p.append("totalSlots", slots);
         p.append("deadline", deadline); p.append("postedBy", postedBy || (moState.positionDefaults && moState.positionDefaults.defaultPostedBy) || "MO");
@@ -744,10 +744,11 @@ async function saveQuotas() {
     let bar = document.getElementById("quotaSaveBar");
     bar.classList.add("active");
     let saved = 0, failed = 0;
+    let csrf = moState.csrfToken || sessionStorage.getItem("csrfToken") || "";
     try {
         for (let [code, totalSlots] of Object.entries(moState.quotaChanges)) {
             let p = new URLSearchParams();
-            p.append("_csrf", moState.csrfToken);
+            p.append("_csrf", csrf);
             p.append("positionCode", code);
             p.append("totalSlots", totalSlots);
             let res = await fetch("api/quota", {

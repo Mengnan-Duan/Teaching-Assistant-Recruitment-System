@@ -481,7 +481,7 @@ async function loadSystemConfig() {
             if (vb && systemConfig.appVersion) {
                 vb.textContent = "v" + systemConfig.appVersion;
             }
-            loadWorkload();
+            // 不再重复调用 loadWorkload()，由 loadAll() 中的 Promise.all 统一管理
         }
     } catch(e) {
         console.warn("[SmartTA] Failed to load system config:", e);
@@ -771,10 +771,12 @@ async function deleteApplicantConfirm(applicantId) {
 
 async function loadWorkload() {
     try {
+        // 优先使用 workloadEntries 端点（返回完整结构化数据）
         let res = await fetch("api/workloads");
         let json = await res.json();
         let entries = json.workloadEntries;
         if (!entries || !entries.length) {
+            // 回退：从 workloads 原始数据构建 entries
             let w = json.workloads || {};
             entries = Object.keys(w).map(function(k) {
                 return { applicantId: k, username: "", taName: k, hours: w[k] };

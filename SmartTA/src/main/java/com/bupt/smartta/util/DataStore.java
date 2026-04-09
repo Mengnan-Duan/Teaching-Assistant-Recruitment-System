@@ -33,6 +33,9 @@ public class DataStore {
     private Map<String, List<Application>> applicationIndexByApplicant;
     private Map<String, List<Application>> applicationIndexByPosition;
 
+    /** 标记是否已初始化（防止重复 seed） */
+    private volatile boolean initialized = false;
+
     private DataStore() {
         String dataDir = System.getProperty("catalina.base")
                      + "/webapps/SmartTA/data";
@@ -51,7 +54,7 @@ public class DataStore {
         return instance;
     }
 
-    public void loadAll() {
+    public synchronized void loadAll() {
         positions    = store.load(POSITIONS,    new TypeReference<List<Position>>(){});
         applicants   = store.load(APPLICANTS,   new TypeReference<List<TAPplicant>>(){});
         applications = store.load(APPLICATIONS, new TypeReference<List<Application>>(){});
@@ -60,17 +63,27 @@ public class DataStore {
         users        = store.load(USERS,        new TypeReference<List<User>>(){});
 
         if (workloadHours == null) workloadHours = new HashMap<>();
+        if (positions    == null) positions    = new ArrayList<>();
+        if (applicants   == null) applicants   = new ArrayList<>();
+        if (applications == null) applications = new ArrayList<>();
+        if (logs         == null) logs         = new ArrayList<>();
+        if (users        == null) users        = new ArrayList<>();
+
         initApplicantIdCounter();
         rebuildApplicationIndexes();
 
-        if (workloadHours.isEmpty()) seedWorkloads();
-        if (positions.isEmpty())    seedPositions();
-        if (applicants.isEmpty())  seedApplicants();
-        if (applications.isEmpty()) seedApplications();
-        if (users.isEmpty())       seedUsers();
-        if (logs.isEmpty()) {
-            addLog(SystemLog.OP_READ, POSITIONS + ".json", SystemLog.STATUS_OK);
-            addLog(SystemLog.OP_READ, APPLICANTS + ".json", SystemLog.STATUS_OK);
+        // 只在首次初始化时执行 seed（initialized 标记控制）
+        if (!initialized) {
+            if (workloadHours.isEmpty()) seedWorkloads();
+            if (positions.isEmpty())    seedPositions();
+            if (applicants.isEmpty())  seedApplicants();
+            if (applications.isEmpty()) seedApplications();
+            if (users.isEmpty())       seedUsers();
+            if (logs.isEmpty()) {
+                addLog(SystemLog.OP_READ, POSITIONS + ".json", SystemLog.STATUS_OK);
+                addLog(SystemLog.OP_READ, APPLICANTS + ".json", SystemLog.STATUS_OK);
+            }
+            initialized = true;
         }
     }
 
@@ -81,6 +94,7 @@ public class DataStore {
     private void initApplicantIdCounter() {
         int maxId = 0;
         for (TAPplicant a : applicants) {
+            if (a == null || a.getId() == null) continue;
             try {
                 int id = Integer.parseInt(a.getId().substring(1));
                 if (id > maxId) maxId = id;
@@ -146,6 +160,7 @@ public class DataStore {
 
     private void seedWorkloads() {
         for (TAPplicant ta : applicants) {
+            if (ta == null) continue;
             String appId = ta.getId();
             if (appId == null || appId.isEmpty()) continue;
             if (!workloadHours.containsKey(appId)) {
@@ -205,13 +220,21 @@ public class DataStore {
     private void rebuildApplicationIndexes() {
         applicationIndexByApplicant = new HashMap<>();
         applicationIndexByPosition = new HashMap<>();
+        if (applications == null) return;
         for (Application a : applications) {
-            applicationIndexByApplicant
-                .computeIfAbsent(a.getApplicantId().toUpperCase(), k -> new ArrayList<>())
-                .add(a);
-            applicationIndexByPosition
-                .computeIfAbsent(a.getPositionCode().toUpperCase(), k -> new ArrayList<>())
-                .add(a);
+            if (a == null) continue;
+            String aid = a.getApplicantId();
+            String pcode = a.getPositionCode();
+            if (aid != null) {
+                applicationIndexByApplicant
+                    .computeIfAbsent(aid.toUpperCase(), k -> new ArrayList<>())
+                    .add(a);
+            }
+            if (pcode != null) {
+                applicationIndexByPosition
+                    .computeIfAbsent(pcode.toUpperCase(), k -> new ArrayList<>())
+                    .add(a);
+            }
         }
     }
 
@@ -220,19 +243,27 @@ public class DataStore {
     public List<Position> getPositions() { return new ArrayList<>(positions); }
 
     public Position getPositionByCode(String code) {
+        if (code == null) return null;
         return positions.stream()
-                .filter(p -> p.getCode().equalsIgnoreCase(code))
+                .filter(p -> p != null && p.getCode() != null && p.getCode().equalsIgnoreCase(code))
                 .findFirst().orElse(null);
     }
 
     /** 检查职位代码是否已存在（不区分大小写） */
     public boolean positionCodeExists(String code) {
+        if (code == null) return false;
         return positions.stream()
+                .filter(p -> p != null && p.getCode() != null)
                 .anyMatch(p -> p.getCode().equalsIgnoreCase(code));
     }
 
     public void addPosition(Position p) {
+        if (p == null) throw new IllegalArgumentException("Position cannot be null");
         synchronized (initLock) {
+            // 幂等性保护：检查 code 是否已存在
+            if (positionCodeExists(p.getCode())) {
+                throw new RuntimeException("Position code already exists: " + p.getCode());
+            }
             positions.add(p);
             if (!savePositionsQuietly()) {
                 positions.remove(p);
@@ -269,16 +300,19 @@ public class DataStore {
     public List<TAPplicant> getApplicants() { return new ArrayList<>(applicants); }
 
     public TAPplicant getApplicantById(String id) {
+        if (id == null) return null;
         return applicants.stream()
-                .filter(a -> a.getId().equalsIgnoreCase(id))
+                .filter(a -> a != null && a.getId() != null && a.getId().equalsIgnoreCase(id))
                 .findFirst().orElse(null);
     }
 
     public void saveApplicant(TAPplicant a) {
+        if (a == null) throw new IllegalArgumentException("Applicant cannot be null");
         synchronized (initLock) {
             boolean found = false;
             for (int i = 0; i < applicants.size(); i++) {
-                if (applicants.get(i).getId().equalsIgnoreCase(a.getId())) {
+                if (applicants.get(i) != null && applicants.get(i).getId() != null
+                        && applicants.get(i).getId().equalsIgnoreCase(a.getId())) {
                     applicants.set(i, a);
                     found = true;
                     break;
@@ -291,7 +325,10 @@ public class DataStore {
                 if (!found) applicants.remove(a);
                 else {
                     TAPplicant original = getApplicantById(a.getId());
-                    if (original != null) applicants.set(applicants.indexOf(a), original);
+                    if (original != null) {
+                        int idx = applicants.indexOf(a);
+                        if (idx >= 0) applicants.set(idx, original);
+                    }
                 }
                 throw new RuntimeException("Failed to save applicants.json");
             }
@@ -320,54 +357,115 @@ public class DataStore {
         }
     }
 
+    private boolean saveApplicantQuietly(TAPplicant a) {
+        if (a == null) return false;
+        try {
+            // 重新保存整个 applicants 列表
+            store.save(APPLICANTS, applicants);
+            return true;
+        } catch (IOException e) {
+            System.err.println("[DataStore] Failed to save applicant quietly: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean saveUserQuietly(User u) {
+        if (u == null) return false;
+        try {
+            store.save(USERS, users);
+            return true;
+        } catch (IOException e) {
+            System.err.println("[DataStore] Failed to save user quietly: " + e.getMessage());
+            return false;
+        }
+    }
+
     // ---- 申请表操作 ----
 
     public List<Application> getApplications() { return new ArrayList<>(applications); }
 
     public List<Application> getApplicationsByApplicantId(String applicantId) {
+        if (applicantId == null) return new ArrayList<>();
         List<Application> cached = applicationIndexByApplicant.get(applicantId.toUpperCase());
         return cached != null ? new ArrayList<>(cached) : new ArrayList<>();
     }
 
     public List<Application> getApplicationsByPositionCode(String code) {
+        if (code == null) return new ArrayList<>();
         List<Application> cached = applicationIndexByPosition.get(code.toUpperCase());
         return cached != null ? new ArrayList<>(cached) : new ArrayList<>();
     }
 
     public Application getApplication(String applicantId, String positionCode) {
+        if (applicantId == null || positionCode == null) return null;
         return applications.stream()
-            .filter(a -> a.getApplicantId().equalsIgnoreCase(applicantId)
-                      && a.getPositionCode().equalsIgnoreCase(positionCode))
+            .filter(a -> a != null
+                      && a.getApplicantId() != null && a.getApplicantId().equalsIgnoreCase(applicantId)
+                      && a.getPositionCode() != null && a.getPositionCode().equalsIgnoreCase(positionCode))
+            .findFirst().orElse(null);
+    }
+
+    /** 通过申请记录 ID 查询（新增，提高效率） */
+    public Application getApplicationById(String id) {
+        if (id == null) return null;
+        return applications.stream()
+            .filter(a -> a != null && a.getId() != null && a.getId().equals(id))
             .findFirst().orElse(null);
     }
 
     public void addApplication(Application app) {
+        if (app == null) throw new IllegalArgumentException("Application cannot be null");
         synchronized (initLock) {
+            String aidKey = app.getApplicantId() != null ? app.getApplicantId().toUpperCase() : "";
+            String pcodeKey = app.getPositionCode() != null ? app.getPositionCode().toUpperCase() : "";
             applications.add(app);
-            applicationIndexByApplicant
-                .computeIfAbsent(app.getApplicantId().toUpperCase(), k -> new ArrayList<>())
-                .add(app);
-            applicationIndexByPosition
-                .computeIfAbsent(app.getPositionCode().toUpperCase(), k -> new ArrayList<>())
-                .add(app);
+            applicationIndexByApplicant.computeIfAbsent(aidKey, k -> new ArrayList<>()).add(app);
+            applicationIndexByPosition.computeIfAbsent(pcodeKey, k -> new ArrayList<>()).add(app);
             if (!saveApplicationsQuietly()) {
                 applications.remove(app);
-                applicationIndexByApplicant.get(app.getApplicantId().toUpperCase()).remove(app);
-                applicationIndexByPosition.get(app.getPositionCode().toUpperCase()).remove(app);
+                List<Application> aidList = applicationIndexByApplicant.get(aidKey);
+                if (aidList != null) aidList.remove(app);
+                List<Application> pcodeList = applicationIndexByPosition.get(pcodeKey);
+                if (pcodeList != null) pcodeList.remove(app);
                 throw new RuntimeException("Failed to save applications.json");
             }
             addLog(SystemLog.OP_WRITE, APPLICATIONS + ".json", SystemLog.STATUS_OK);
         }
     }
 
+    /** 增量更新申请索引（替代全量重建，提升性能） */
+    private void updateApplicationIndexes(Application app, String oldApplicantId, String oldPositionCode) {
+        // 从旧索引中移除
+        if (oldApplicantId != null) {
+            List<Application> oldAidList = applicationIndexByApplicant.get(oldApplicantId.toUpperCase());
+            if (oldAidList != null) oldAidList.remove(app);
+        }
+        if (oldPositionCode != null) {
+            List<Application> oldPcodeList = applicationIndexByPosition.get(oldPositionCode.toUpperCase());
+            if (oldPcodeList != null) oldPcodeList.remove(app);
+        }
+        // 添加到新索引
+        String aidKey = app.getApplicantId() != null ? app.getApplicantId().toUpperCase() : "";
+        String pcodeKey = app.getPositionCode() != null ? app.getPositionCode().toUpperCase() : "";
+        applicationIndexByApplicant.computeIfAbsent(aidKey, k -> new ArrayList<>()).add(app);
+        applicationIndexByPosition.computeIfAbsent(pcodeKey, k -> new ArrayList<>()).add(app);
+    }
+
     public void updateApplication(Application app) {
+        if (app == null) throw new IllegalArgumentException("Application cannot be null");
         synchronized (initLock) {
+            String oldApplicantId = null;
+            String oldPositionCode = null;
             for (int i = 0; i < applications.size(); i++) {
-                if (applications.get(i).getId().equals(app.getId())) {
+                if (applications.get(i) != null && applications.get(i).getId().equals(app.getId())) {
+                    oldApplicantId = applications.get(i).getApplicantId();
+                    oldPositionCode = applications.get(i).getPositionCode();
                     applications.set(i, app);
-                    rebuildApplicationIndexes(); // 索引重建
+                    updateApplicationIndexes(app, oldApplicantId, oldPositionCode);
                     if (!saveApplicationsQuietly()) {
-                        rebuildApplicationIndexes(); // 回滚时重建
+                        // 回滚索引
+                        updateApplicationIndexes(applications.get(i), app.getApplicantId(), app.getPositionCode());
+                        applications.set(i, applications.get(i)); // 恢复原值
                         throw new RuntimeException("Failed to save applications.json");
                     }
                     addLog(SystemLog.OP_WRITE, APPLICATIONS + ".json", SystemLog.STATUS_OK);
@@ -411,6 +509,7 @@ public class DataStore {
     }
 
     public void addLog(SystemLog log) {
+        if (log == null) return;
         logs.add(0, log);
         if (logs.size() > 200) logs = new ArrayList<>(logs.subList(0, 200));
         try {
@@ -425,6 +524,7 @@ public class DataStore {
     public Map<String, Integer> getWorkloadHours() { return new HashMap<>(workloadHours); }
 
     public void setWorkloadHours(String applicantId, int hours) {
+        if (applicantId == null) return;
         synchronized (initLock) {
             workloadHours.put(applicantId, hours);
             try {
@@ -439,7 +539,9 @@ public class DataStore {
     }
 
     public int getWorkloadHours(String applicantId) {
-        return workloadHours.getOrDefault(applicantId, 0);
+        if (applicantId == null) return 0;
+        Integer val = workloadHours.get(applicantId);
+        return val != null ? val : 0;
     }
 
     private boolean saveWorkloadsQuietly() {
@@ -457,16 +559,19 @@ public class DataStore {
     public List<User> getUsers() { return new ArrayList<>(users); }
 
     public User getUserByUsername(String username) {
+        if (username == null) return null;
         return users.stream()
-                .filter(u -> u.getUsername().equalsIgnoreCase(username))
+                .filter(u -> u != null && u.getUsername() != null && u.getUsername().equalsIgnoreCase(username))
                 .findFirst().orElse(null);
     }
 
     public void saveUser(User u) {
+        if (u == null) throw new IllegalArgumentException("User cannot be null");
         synchronized (initLock) {
             boolean found = false;
             for (int i = 0; i < users.size(); i++) {
-                if (users.get(i).getUsername().equalsIgnoreCase(u.getUsername())) {
+                if (users.get(i) != null && users.get(i).getUsername() != null
+                        && users.get(i).getUsername().equalsIgnoreCase(u.getUsername())) {
                     users.set(i, u);
                     found = true;
                     break;
@@ -479,7 +584,10 @@ public class DataStore {
                 if (!found) users.remove(u);
                 else {
                     User original = getUserByUsername(u.getUsername());
-                    if (original != null) users.set(users.indexOf(u), original);
+                    if (original != null) {
+                        int idx = users.indexOf(u);
+                        if (idx >= 0) users.set(idx, original);
+                    }
                 }
                 throw new RuntimeException("Failed to save users.json");
             }
@@ -509,4 +617,62 @@ public class DataStore {
     }
 
     public JsonFileStore getStore() { return store; }
+
+    // ============================================================
+    // SystemConfig 懒加载（只读，不需要频繁刷新）
+    // ============================================================
+
+    private static final String SYSTEM_CONFIG = "system_config";
+    private volatile SystemConfig systemConfig = null;
+
+    /**
+     * 获取系统配置（懒加载，配置变更时调用 reloadSystemConfig()）。
+     */
+    public SystemConfig getSystemConfig() {
+        if (systemConfig == null) {
+            synchronized (initLock) {
+                if (systemConfig == null) {
+                    reloadSystemConfig();
+                }
+            }
+        }
+        return systemConfig;
+    }
+
+    /**
+     * 重新加载系统配置（当配置被修改时调用）。
+     */
+    public void reloadSystemConfig() {
+        try {
+            systemConfig = store.loadObject(SYSTEM_CONFIG, SystemConfig.class);
+            if (systemConfig == null) {
+                // 配置不存在时创建默认配置
+                systemConfig = createDefaultSystemConfig();
+            }
+        } catch (Exception e) {
+            System.err.println("[DataStore] Failed to load system_config: " + e.getMessage());
+            systemConfig = createDefaultSystemConfig();
+        }
+    }
+
+    /**
+     * 创建默认系统配置（仅在配置文件损坏或不存在时使用）。
+     */
+    private SystemConfig createDefaultSystemConfig() {
+        SystemConfig cfg = new SystemConfig();
+        cfg.setAppVersion("2.0");
+        cfg.setBuildDate(java.time.LocalDate.now().toString());
+
+        SystemConfig.WorkloadConfig wc = new SystemConfig.WorkloadConfig(20, 20, "h/week");
+        cfg.setWorkloadConfig(wc);
+
+        SystemConfig.PositionDefaults pd = new SystemConfig.PositionDefaults(8, 2, "2026-04-30", "Admin");
+        cfg.setPositionDefaults(pd);
+
+        cfg.setSkillSuggestions(Arrays.asList(
+            "Java", "Python", "JavaScript", "Git", "Agile", "SQL",
+            "React", "Node.js", "Machine Learning", "Docker"
+        ));
+        return cfg;
+    }
 }
