@@ -18,12 +18,13 @@
     }
 %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="smartta-shell">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TA Dashboard · Smart-TA</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/smartta-shell.css" />
     <style>
 :root {
     --ink:#1a1a2e; --surface:#f8f7f4; --card:#ffffff;
@@ -38,7 +39,7 @@
     --transition:0.2s ease;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:var(--font-body); background:var(--surface); color:var(--ink); line-height:1.6; }
+body { font-family:var(--font-body); color:var(--ink); line-height:1.6; }
 a { color:var(--primary); text-decoration:none; }
 
 .topbar {
@@ -243,7 +244,7 @@ textarea { resize:vertical; min-height:80px; }
 }
 </style>
 </head>
-<body>
+<body class="smartta-shell">
 
 <div class="topbar">
     <a href="#" class="back-btn" onclick="event.preventDefault();doLogout();" title="Sign out">&#8592; Smart-TA</a>
@@ -1008,6 +1009,18 @@ async function openAppDetail(appId, code, status) {
     let app = state.applications.find(a => a.positionCode === code);
     if (!app) return;
     let fillClass = app.aiScore >= 75 ? "fill-high" : app.aiScore >= 55 ? "fill-mid" : "fill-low";
+    let llmSection = app.llmExplanation
+        ? `<div style="padding:14px;background:#e8f4fd;border-radius:8px;margin-bottom:14px;font-size:0.82rem;white-space:pre-wrap;line-height:1.6">
+               <strong>&#x2726; AI &#x2022; DeepSeek Analysis</strong><br/>
+               <span style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;display:block">Powered by DeepSeek LLM</span>
+               ${app.llmExplanation.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br/>')}
+           </div>`
+        : `<div style="padding:14px;background:var(--primary-soft);border-radius:8px;margin-bottom:14px;font-size:0.82rem">
+               <strong>&#x2726; AI Match Analysis</strong><br/>
+               Formula: 0.4 Skill + 0.3 GPA + 0.3 Availability<br/>
+               Score: <strong>${app.aiScore}/100</strong><br/>
+               <em>${app.aiExplanation || ''}</em>
+           </div>`;
     let html = `
         <div style="margin-bottom:16px">
             <strong>Module:</strong> ${app.positionCode} &mdash; ${app.positionName}<br/>
@@ -1015,13 +1028,8 @@ async function openAppDetail(appId, code, status) {
             <strong>Applied:</strong> ${app.appliedAt}
         </div>
         <div class="match-bar" style="width:200px;margin-bottom:12px"><div class="fill ${fillClass}" style="width:${app.aiScore}%"></div></div>
-        <div style="padding:14px;background:var(--primary-soft);border-radius:8px;margin-bottom:14px;font-size:0.82rem">
-            <strong>&#x2726; AI Match Analysis</strong><br/>
-            Formula: 0.4 Skill + 0.3 GPA + 0.3 Availability<br/>
-            Score: <strong>${app.aiScore}/100</strong><br/>
-            <em>${app.aiExplanation}</em>
-        </div>
-        <div style="font-size:0.78rem;color:var(--muted)">Traceability: applications.json to AI engine to UI</div>`;
+        ${llmSection}
+        <div style="font-size:0.78rem;color:var(--muted)">Traceability: applications.json &rarr; DeepSeek LLM &rarr; UI</div>`;
     openModal("Application Detail - " + code, html);
 }
 

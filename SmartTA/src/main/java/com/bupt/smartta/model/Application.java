@@ -22,6 +22,7 @@ public class Application implements Serializable {
     private int gpaScore;
     private int availScore;
     private String aiExplanation;
+    private String llmExplanation;
 
     public Application() {}
 
@@ -69,4 +70,6 @@ public class Application implements Serializable {
     public void setAvailScore(int availScore) { this.availScore = availScore; }
     public String getAiExplanation() { return aiExplanation; }
     public void setAiExplanation(String aiExplanation) { this.aiExplanation = aiExplanation; }
+    public String getLlmExplanation() { return llmExplanation; }
+    public void setLlmExplanation(String llmExplanation) { this.llmExplanation = llmExplanation; }
 }

@@ -33,12 +33,13 @@
     }
 %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="smartta-shell">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login · Smart-TA</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/smartta-shell.css" />
     <style>
 :root {
     --ink:#1a1a2e; --surface:#f8f7f4; --card:#ffffff;
@@ -54,7 +55,7 @@
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
-    font-family:var(--font-body); background:var(--surface);
+    font-family:var(--font-body);
     color:var(--ink); min-height:100vh; display:flex;
     align-items:center; justify-content:center;
 }
@@ -253,7 +254,7 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 }
 </style>
 </head>
-<body>
+<body class="smartta-shell">
 
 <div class="page-wrapper">
     <!-- LEFT BRAND SIDE -->

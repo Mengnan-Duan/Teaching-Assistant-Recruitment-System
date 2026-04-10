@@ -1,0 +1,19 @@
+/**
+ * SmartTA 全站页面背景
+ * 与侧栏 navy / teal / primary 色系一致，轻量不抢内容
+ */
+html.smartta-shell {
+  min-height: 100%;
+}
+
+body.smartta-shell {
+  min-height: 100vh;
+  margin: 0;
+  background-color: #e8ecf2;
+  background-image:
+    radial-gradient(ellipse 130% 100% at 8% -15%, rgba(69, 123, 157, 0.2), transparent 58%),
+    radial-gradient(ellipse 110% 90% at 96% 8%,  rgba(42, 157, 143, 0.15), transparent 52%),
+    radial-gradient(ellipse 85%  65% at 48% 105%, rgba(29,  53,  87, 0.1),  transparent 50%),
+    linear-gradient(180deg, #eef1f6 0%, #f4f2ee 50%, #eef5f3 100%);
+  background-attachment: fixed;
+}
