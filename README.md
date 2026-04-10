@@ -1,4 +1,4 @@
-<div align="center">
+# Smart-TA — Tomcat Deployment Guide
 
 # Smart-TA: AI-Powered Recruitment for BUPT
 
@@ -16,7 +16,8 @@
 
 > _"Replacing scattered emails and opaque selection with a single, intelligent platform."_
 
-</div>
+**IMPORTANT:** JSP files and `WEB-INF/` must be directly under `SmartTA/`, NOT inside a `WebContent/` subfolder.  
+If you copied from `SmartTA/WebContent/`, move everything up one level.
 
 ---
 
