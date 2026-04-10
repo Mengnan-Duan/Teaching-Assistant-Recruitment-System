@@ -2,6 +2,7 @@ package com.bupt.smartta.servlet;
 
 import com.bupt.smartta.model.*;
 import com.bupt.smartta.util.DataStore;
+import com.bupt.smartta.util.LLMService;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -15,6 +16,7 @@ import java.util.regex.Pattern;
 public class ApiServlet extends HttpServlet {
 
     private final DataStore ds = DataStore.getInstance();
+    private final LLMService llmService = LLMService.getInstance();
 
     /** 合法的申请状态值 */
     private static final Set<String> VALID_STATUSES = Set.of(
@@ -142,19 +144,21 @@ public class ApiServlet extends HttpServlet {
                 break;
 
             case "applications":
-                String aid = req.getParameter("applicantId");
-                sb.append("{\"applications\":[");
-                List<Application> apps;
-                if (aid != null && !aid.isEmpty()) {
-                    apps = ds.getApplicationsByApplicantId(aid);
-                } else {
-                    apps = ds.getApplications();
+                {
+                    String aid = req.getParameter("applicantId");
+                    sb.append("{\"applications\":[");
+                    List<Application> apps;
+                    if (aid != null && !aid.isEmpty()) {
+                        apps = ds.getApplicationsByApplicantId(aid);
+                    } else {
+                        apps = ds.getApplications();
+                    }
+                    for (int i = 0; i < apps.size(); i++) {
+                        sb.append(applicationToJson(apps.get(i)));
+                        if (i < apps.size() - 1) sb.append(",");
+                    }
+                    sb.append("]}");
                 }
-                for (int i = 0; i < apps.size(); i++) {
-                    sb.append(applicationToJson(apps.get(i)));
-                    if (i < apps.size() - 1) sb.append(",");
-                }
-                sb.append("]}");
                 break;
 
             case "applicants":
@@ -239,27 +243,59 @@ public class ApiServlet extends HttpServlet {
                 sb.append(systemConfigToJson(ds.getSystemConfig()));
                 break;
             case "score":
-                String applicantId = req.getParameter("applicantId");
-                String posCode = req.getParameter("positionCode");
-                TAPplicant ta = ds.getApplicantById(applicantId);
-                Position pos = ds.getPositionByCode(posCode);
-                if (ta == null || pos == null) {
-                    sendError(resp, 404, "Applicant or position not found");
-                    return;
+                {
+                    String applicantId = req.getParameter("applicantId");
+                    String posCode = req.getParameter("positionCode");
+                    TAPplicant ta = ds.getApplicantById(applicantId);
+                    Position pos = ds.getPositionByCode(posCode);
+                    if (ta == null || pos == null) {
+                        sendError(resp, 404, "Applicant or position not found");
+                        return;
+                    }
+                    int score = (int) ta.computeAIScore(pos.getRequiredSkills(), pos.getHoursPerWeek());
+                    int matched = ta.getMatchedSkillCount(pos.getRequiredSkills());
+                    int reqCount = pos.getRequiredSkills().size();
+                    int skillPct = reqCount > 0 ? (matched * 100 / reqCount) : 0;
+                    int gpaPct = (int) ((ta.getGpa() / 4.0) * 100);
+                    int availPct = Math.min((ta.getHoursAvailable() * 100) / 20, 100);
+                    sb.append("{\"score\":").append(score)
+                      .append(",\"skillScore\":").append(skillPct)
+                      .append(",\"gpaScore\":").append(gpaPct)
+                      .append(",\"availScore\":").append(availPct)
+                      .append(",\"matchedSkills\":").append(matched)
+                      .append(",\"requiredSkills\":").append(reqCount)
+                      .append("}");
                 }
-                int score = (int) ta.computeAIScore(pos.getRequiredSkills(), pos.getHoursPerWeek());
-                int matched = ta.getMatchedSkillCount(pos.getRequiredSkills());
-                int reqCount = pos.getRequiredSkills().size();
-                int skillPct = reqCount > 0 ? (matched * 100 / reqCount) : 0;
-                int gpaPct = (int) ((ta.getGpa() / 4.0) * 100);
-                int availPct = Math.min((ta.getHoursAvailable() * 100) / 20, 100);
-                sb.append("{\"score\":").append(score)
-                  .append(",\"skillScore\":").append(skillPct)
-                  .append(",\"gpaScore\":").append(gpaPct)
-                  .append(",\"availScore\":").append(availPct)
-                  .append(",\"matchedSkills\":").append(matched)
-                  .append(",\"requiredSkills\":").append(reqCount)
-                  .append("}");
+                break;
+
+            case "llmanalysis":
+                {
+                    String aid = req.getParameter("applicantId");
+                    String pCode = req.getParameter("positionCode");
+                    TAPplicant ta2 = ds.getApplicantById(aid);
+                    Position pos2 = ds.getPositionByCode(pCode);
+                    if (ta2 == null || pos2 == null) {
+                        sendError(resp, 404, "Applicant or position not found");
+                        return;
+                    }
+                    int sc = (int) ta2.computeAIScore(pos2.getRequiredSkills(), pos2.getHoursPerWeek());
+                    int mch = ta2.getMatchedSkillCount(pos2.getRequiredSkills());
+                    int rc = pos2.getRequiredSkills().size();
+                    int sp = rc > 0 ? (mch * 100 / rc) : 0;
+                    int gp = (int) ((ta2.getGpa() / 4.0) * 100);
+                    int avp = Math.min((ta2.getHoursAvailable() * 100) / 20, 100);
+
+                    String skillsStr = String.join(", ", ta2.getSkills());
+                    String reqSkillsStr = String.join(", ", pos2.getRequiredSkills());
+                    String analysis = llmService.generateMatchAnalysis(
+                            ta2.getName(), skillsStr,
+                            ta2.getGpa(), ta2.getHoursAvailable(),
+                            pos2.getName(), reqSkillsStr,
+                            pos2.getHoursPerWeek(),
+                            sp, gp, avp, sc);
+
+                    sb.append("{\"analysis\":").append(esc(analysis)).append("}");
+                }
                 break;
 
             default:
@@ -403,9 +439,29 @@ public class ApiServlet extends HttpServlet {
         }
 
         int score = (int) ta.computeAIScore(pos.getRequiredSkills(), pos.getHoursPerWeek());
+        int matched = ta.getMatchedSkillCount(pos.getRequiredSkills());
+        int reqCount = pos.getRequiredSkills().size();
+        int skillPct = reqCount > 0 ? (matched * 100 / reqCount) : 0;
+        int gpaPct = (int) ((ta.getGpa() / 4.0) * 100);
+        int availPct = Math.min((ta.getHoursAvailable() * 100) / 20, 100);
+
         Application app = new Application(applicantId,
             applicantName != null && !applicantName.isEmpty() ? applicantName : ta.getName(),
             positionCode, pos.getName(), score);
+        app.setSkillScore(skillPct);
+        app.setGpaScore(gpaPct);
+        app.setAvailScore(availPct);
+
+        String skillsStr = String.join(", ", ta.getSkills());
+        String reqSkillsStr = String.join(", ", pos.getRequiredSkills());
+        String llmExplanation = llmService.generateMatchAnalysis(
+                app.getApplicantName(), skillsStr,
+                ta.getGpa(), ta.getHoursAvailable(),
+                pos.getName(), reqSkillsStr,
+                pos.getHoursPerWeek(),
+                skillPct, gpaPct, availPct, score);
+        app.setLlmExplanation(llmExplanation);
+
         ds.addApplication(app);
 
         sb.append("{\"success\":true,\"message\":\"Application submitted successfully\",")
@@ -1012,7 +1068,8 @@ public class ApiServlet extends HttpServlet {
         sb.append("\"appliedAt\":\"").append(esc(a.getAppliedAt())).append("\",");
         sb.append("\"status\":\"").append(esc(a.getStatus())).append("\",");
         sb.append("\"aiScore\":").append(a.getAiScore()).append(",");
-        sb.append("\"aiExplanation\":\"").append(esc(a.getAiExplanation())).append("\"");
+        sb.append("\"aiExplanation\":\"").append(esc(a.getAiExplanation())).append("\",");
+        sb.append("\"llmExplanation\":").append(a.getLlmExplanation() != null ? "\"" + esc(a.getLlmExplanation()) + "\"" : "null");
         sb.append("}");
         return sb.toString();
     }

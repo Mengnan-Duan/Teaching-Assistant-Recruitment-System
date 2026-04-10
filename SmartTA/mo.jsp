@@ -15,12 +15,13 @@
     }
 %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="smartta-shell">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>MO Portal · Smart-TA</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/smartta-shell.css" />
 <style>
 :root {
     --ink:#1a1a2e; --surface:#f8f7f4; --card:#ffffff;
@@ -35,7 +36,7 @@
     --transition:0.2s ease;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:var(--font-body); background:var(--surface); color:var(--ink); line-height:1.6; }
+body { font-family:var(--font-body); color:var(--ink); line-height:1.6; }
 a { color:var(--primary); text-decoration:none; }
 
 .topbar {
@@ -183,7 +184,7 @@ tr:last-child td { border-bottom:none; }
 .topbar .back-btn:hover { color:var(--ink); }
 </style>
 </head>
-<body>
+<body class="smartta-shell">
 
 <div class="topbar">
     <a href="#" class="back-btn" onclick="event.preventDefault();doMoLogout();" title="Sign out">&#8592; Smart-TA</a>
@@ -266,7 +267,7 @@ tr:last-child td { border-bottom:none; }
                 <div class="section-header">
                     <h2>Applicants — <span id="selectedPosLabel">Select a position</span></h2>
                     <div class="section-header-actions">
-                        <span class="ai-inline-badge">AI Ranked</span>
+                        <span class="ai-inline-badge">AI &#x2605; DeepSeek</span>
                         <span class="pill-count" id="applicantCount">0 Applicants</span>
                     </div>
                 </div>
@@ -587,7 +588,7 @@ function renderApplicantTable() {
         let canAccept = r.app.status !== "Accepted" ? "" : "disabled";
         let canReject = r.app.status !== "Rejected" ? "" : "disabled";
         let scoreColor = r.score >= 75 ? "var(--success)" : r.score >= 55 ? "#b8860b" : "var(--accent)";
-        tbodyHtml += "<tr>" +
+        tbodyHtml += "<tr onclick=\"showAppLLMDetail('" + r.app.id + "','" + r.app.applicantId + "','" + r.app.positionCode + "')\" style=\"cursor:pointer\" title=\"Click for AI analysis\">" +
             '<td><strong style="color:' + rankColor + '">#' + (idx+1) + '</strong></td>' +
             '<td><strong>' + r.applicant.name + '</strong><br/><span style="font-size:0.78rem;color:var(--muted)">' + r.applicant.yearOfStudy + ' &middot; ' + r.applicant.hoursAvailable + 'h avail</span></td>' +
             '<td>' + skillTagHtml + '</td>' +
@@ -609,6 +610,49 @@ function renderApplicantTable() {
         "<thead><tr><th>Rank</th><th>Applicant</th><th>Required Skills</th><th>GPA</th><th>AI Score</th><th>Status</th><th>Actions</th></tr></thead>" +
         "<tbody>" + tbodyHtml + "</tbody>" +
     "</table>";
+}
+
+async function showAppLLMDetail(appId, applicantId, positionCode) {
+    let app = moState.applications.find(a => a.id === appId);
+    let applicant = moState.applicants.find(a => a.id === applicantId);
+    let pos = moState.positions.find(p => p.code === positionCode);
+    if (!app || !applicant || !pos) return;
+
+    let reqSkills = pos.skillsList || [];
+    let matched = reqSkills.filter(s => applicant.skills.includes(s)).length;
+    let gpaScore = Math.round((applicant.gpa / 4.0) * 100);
+    let availScore = Math.min(Math.round((applicant.hoursAvailable / 20) * 100), 100);
+    let skillScore = reqSkills.length > 0 ? Math.round((matched / reqSkills.length) * 100) : 0;
+    let totalScore = Math.round(0.4 * skillScore + 0.3 * gpaScore + 0.3 * availScore);
+
+    let detailHtml = `
+        <div style="margin-bottom:14px">
+            <strong>Applicant:</strong> ${applicant.name} &nbsp;(${applicant.yearOfStudy})<br/>
+            <strong>Position:</strong> ${pos.code} &mdash; ${pos.name}<br/>
+            <strong>Status:</strong> ${app.status} &nbsp; <strong>Applied:</strong> ${app.appliedAt}
+        </div>
+        <div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap">
+            <div><span style="font-size:0.75rem;color:var(--muted)">AI Score</span><br/><strong style="font-size:1.4rem;color:var(--primary)">${totalScore}</strong></div>
+            <div><span style="font-size:0.75rem;color:var(--muted)">Skill Match</span><br/><strong>${skillScore}%</strong><br/><span style="font-size:0.72rem">${matched}/${reqSkills.length} matched</span></div>
+            <div><span style="font-size:0.75rem;color:var(--muted)">GPA</span><br/><strong>${gpaScore}%</strong><br/><span style="font-size:0.72rem">${applicant.gpa}/4.0</span></div>
+            <div><span style="font-size:0.75rem;color:var(--muted)">Availability</span><br/><strong>${availScore}%</strong><br/><span style="font-size:0.72rem">${applicant.hoursAvailable}h/week</span></div>
+        </div>`;
+
+    if (app.llmExplanation) {
+        detailHtml += `<div style="padding:14px;background:#e8f4fd;border-radius:8px;font-size:0.82rem;white-space:pre-wrap;line-height:1.7;margin-bottom:12px">
+            <strong>&#x2726; DeepSeek AI Analysis</strong>
+            <span style="font-size:0.72rem;color:var(--muted);display:block;margin-bottom:8px">Powered by DeepSeek LLM</span>
+            ${app.llmExplanation.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br/>')}
+        </div>`;
+    } else {
+        detailHtml += `<div style="padding:14px;background:var(--primary-soft);border-radius:8px;font-size:0.82rem">
+            <strong>&#x2726; AI Match Analysis</strong><br/>
+            Formula: 0.4×Skill + 0.3×GPA + 0.3×Availability<br/>
+            <em>${app.aiExplanation || 'No analysis available.'}</em>
+        </div>`;
+    }
+
+    openModal("AI Match Analysis &mdash; " + applicant.name, detailHtml);
 }
 
 async function publishPosition() {

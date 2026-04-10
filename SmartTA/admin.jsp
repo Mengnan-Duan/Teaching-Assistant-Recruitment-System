@@ -17,12 +17,13 @@
     }
 %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="smartta-shell">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Admin · Smart-TA</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/smartta-shell.css" />
 <style>
 :root {
     --ink:#1a1a2e; --surface:#f8f7f4; --card:#ffffff;
@@ -37,7 +38,7 @@
     --transition:0.2s ease;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:var(--font-body); background:var(--surface); color:var(--ink); line-height:1.6; }
+body { font-family:var(--font-body); color:var(--ink); line-height:1.6; }
 a { color:var(--primary); text-decoration:none; }
 
 .topbar {
@@ -210,7 +211,7 @@ tr:last-child td { border-bottom:none; }
 @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
 </style>
 </head>
-<body>
+<body class="smartta-shell">
 
 <div class="topbar">
     <a href="#" class="back-btn" onclick="event.preventDefault();doAdminLogout();" title="Sign out">&#8592; Smart-TA</a>
