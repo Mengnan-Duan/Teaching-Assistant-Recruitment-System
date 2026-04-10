@@ -510,13 +510,48 @@ public class DataStore {
 
     public void addLog(SystemLog log) {
         if (log == null) return;
-        logs.add(0, log);
-        if (logs.size() > 200) logs = new ArrayList<>(logs.subList(0, 200));
-        try {
-            store.save(LOGS, logs);
-        } catch (IOException e) {
-            System.err.println("[DataStore] Failed to save logs: " + e.getMessage());
+        synchronized (initLock) {
+            logs.add(0, log);
+            // 增加日志存储上限到500条
+            if (logs.size() > 500) logs = new ArrayList<>(logs.subList(0, 500));
+            try {
+                store.save(LOGS, logs);
+            } catch (IOException e) {
+                System.err.println("[DataStore] Failed to save logs: " + e.getMessage());
+            }
         }
+    }
+
+    /**
+     * 清空日志（仅限管理员使用）
+     */
+    public void clearLogs() {
+        synchronized (initLock) {
+            logs.clear();
+            try {
+                store.save(LOGS, logs);
+            } catch (IOException e) {
+                System.err.println("[DataStore] Failed to clear logs: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 根据日志级别过滤日志
+     */
+    public List<SystemLog> getLogsByLevel(String level) {
+        return logs.stream()
+                .filter(log -> level.equals(log.getLevel()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 根据操作类型过滤日志
+     */
+    public List<SystemLog> getLogsByOperation(String operation) {
+        return logs.stream()
+                .filter(log -> operation.equals(log.getOperation()))
+                .collect(Collectors.toList());
     }
 
     // ---- 工作量操作 ----
