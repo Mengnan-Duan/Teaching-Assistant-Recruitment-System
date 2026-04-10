@@ -432,6 +432,16 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 </div>
 
 <script>
+function clearRegisterForm() {
+    document.getElementById("regDisplayName").value = "";
+    document.getElementById("regUsername").value = "";
+    document.getElementById("regEmail").value = "";
+    document.getElementById("regPassword").value = "";
+    document.querySelectorAll("#regRoleSelector .role-option").forEach(el => {
+        el.classList.remove("selected");
+        el.querySelector("input").checked = false;
+    });
+}
 // Load system config (demo accounts, version) from backend on page load
 (async function() {
     try {
@@ -485,6 +495,7 @@ function showRegister() {
     document.getElementById("footerText").innerHTML = 'Already have an account? <a onclick="showLogin()\">Sign in</a>';
     hideError();
     hideSuccess();
+    clearRegisterForm();
 }
 
 // Auto-select role from query param
@@ -608,6 +619,13 @@ async function doRegister() {
         showError("Password: at least 8 characters, with both letters and numbers");
         return;
     }
+   // 邮箱格式验证
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+    showError("Please enter a valid email address");
+    isSubmitting = false;
+    return;
+}
     if (!email) { showError("Please enter your email"); return; }
     if (roles.length === 0) { showError("Please select at least one role"); return; }
 
@@ -642,7 +660,8 @@ async function doRegister() {
             showSuccess("Account created successfully. You can sign in below with your username.");
             document.getElementById("loginUsername").value = username;
             document.getElementById("loginPassword").value = "";
-            showLogin({ keepSuccess: true });
+            clearRegisterForm();
+	    showLogin({ keepSuccess: true });
             document.getElementById("loginPassword").focus();
         } else {
             showError(json.error || json.message || "Registration failed");
