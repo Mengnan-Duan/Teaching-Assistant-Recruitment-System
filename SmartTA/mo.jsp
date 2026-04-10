@@ -358,6 +358,7 @@ let moState = {
 (async function init() {
     await moCheckSession();
     if (!moState.session.username) return;
+    document.getElementById("posDeadline").min = new Date().toISOString().split("T")[0];
     await Promise.all([loadAll(), loadSystemConfig()]);
 })();
 
@@ -656,6 +657,10 @@ async function showAppLLMDetail(appId, applicantId, positionCode) {
 }
 
 async function publishPosition() {
+    if (moState.positions.some(p => p.code === code)) {
+    showToast("Module code already exists!", "error");
+    return;
+}
     let code = document.getElementById("posCode").value.trim();
     let name = document.getElementById("posName").value.trim();
     let skills = document.getElementById("posSkills").value.trim();
