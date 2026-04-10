@@ -9,6 +9,10 @@
       rel="stylesheet"
     />
     <style>
+      /* ================================================================
+         DESIGN TOKENS
+         Centralized CSS variables for consistency (Nielsen: Consistency)
+         ================================================================ */
       :root {
         --ink: #1a1a2e;
         --surface: #f8f7f4;
@@ -17,6 +21,7 @@
         --accent-soft: #fde8ea;
         --primary: #457b9d;
         --primary-dark: #1d3557;
+        --primary-soft: #e8f0f6;
         --success: #2a9d8f;
         --success-soft: #e6f5f3;
         --warn: #e9c46a;
@@ -24,11 +29,13 @@
         --muted: #8d99ae;
         --border: #e0ddd8;
         --radius: 14px;
+        --radius-sm: 8px;
         --shadow-sm: 0 1px 3px rgba(26, 26, 46, 0.06);
         --shadow-md: 0 4px 20px rgba(26, 26, 46, 0.08);
         --shadow-lg: 0 12px 40px rgba(26, 26, 46, 0.12);
         --font-body: "DM Sans", sans-serif;
         --font-display: "Playfair Display", serif;
+        --transition: 0.2s ease;
       }
 
       * {
@@ -45,7 +52,10 @@
         overflow-x: hidden;
       }
 
-      /* ========== NAV ========== */
+      /* ================================================================
+         TOP NAVIGATION BAR
+         Sticky header with role switching (Visibility of system status)
+         ================================================================ */
       .topbar {
         position: sticky;
         top: 0;
@@ -81,7 +91,7 @@
         border-radius: 100px;
         border: 1.5px solid transparent;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all var(--transition);
         background: transparent;
         color: var(--muted);
       }
@@ -116,40 +126,38 @@
         font-size: 0.75rem;
       }
 
-      /* ========== PAGE TABS ========== */
-      .page-selector {
+      /* ================================================================
+         BREADCRUMB NAVIGATION
+         Provides context of current location (Nielsen: Visibility)
+         ================================================================ */
+      .breadcrumb {
         display: flex;
-        justify-content: center;
+        align-items: center;
         gap: 8px;
-        padding: 20px 32px 0;
-      }
-      .page-selector button {
-        font-family: var(--font-body);
-        font-size: 0.9rem;
-        font-weight: 500;
-        padding: 10px 28px;
-        border-radius: 12px 12px 0 0;
-        border: 1.5px solid var(--border);
-        border-bottom: none;
-        cursor: pointer;
-        transition: all 0.25s;
-        background: var(--card);
+        padding: 14px 0 0;
+        font-size: 0.82rem;
         color: var(--muted);
-        position: relative;
-        top: 1px;
       }
-      .page-selector button:hover {
+      .breadcrumb a {
+        color: var(--primary);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .breadcrumb a:hover {
+        text-decoration: underline;
+      }
+      .breadcrumb .sep {
+        color: var(--border);
+      }
+      .breadcrumb .current {
         color: var(--ink);
-      }
-      .page-selector button.active {
-        background: var(--surface);
-        color: var(--primary-dark);
-        font-weight: 700;
-        border-color: var(--primary);
-        box-shadow: 0 -3px 0 var(--primary);
+        font-weight: 600;
       }
 
-      /* ========== PAGES ========== */
+      /* ================================================================
+         PAGE SYSTEM
+         Smooth page transitions (Aesthetic & minimal design)
+         ================================================================ */
       .page {
         display: none;
         animation: fadeUp 0.4s ease;
@@ -168,9 +176,11 @@
         }
       }
 
-      /* ========== LAYOUT ========== */
+      /* ================================================================
+         LAYOUT CONTAINERS
+         ================================================================ */
       .dashboard {
-        padding: 28px 32px 60px;
+        padding: 14px 32px 60px;
         max-width: 1320px;
         margin: 0 auto;
       }
@@ -186,6 +196,7 @@
         padding: 36px 40px;
         color: #fff;
         margin-bottom: 28px;
+        margin-top: 18px;
         position: relative;
         overflow: hidden;
       }
@@ -214,40 +225,11 @@
         font-size: 0.95rem;
         max-width: 520px;
       }
-      .assessment-note {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 18px;
-        background: linear-gradient(135deg, #fff8eb 0%, #fff2d8 100%);
-        border: 1px solid #f0d7a1;
-        border-radius: var(--radius);
-        padding: 18px 22px;
-        margin: 24px auto 0;
-        max-width: 1320px;
-        box-shadow: var(--shadow-sm);
-      }
-      .assessment-note strong {
-        display: block;
-        color: #8a5a00;
-        margin-bottom: 4px;
-      }
-      .assessment-note p {
-        font-size: 0.9rem;
-        color: #6c5525;
-      }
-      .assessment-note .note-tag {
-        flex-shrink: 0;
-        background: #8a5a00;
-        color: #fff;
-        border-radius: 999px;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        padding: 6px 12px;
-      }
 
+      /* ================================================================
+         STATS CARDS ROW
+         Key metrics at a glance (Visibility of system status)
+         ================================================================ */
       .stats-row {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -261,8 +243,8 @@
         border: 1px solid var(--border);
         box-shadow: var(--shadow-sm);
         transition:
-          transform 0.2s,
-          box-shadow 0.2s;
+          transform var(--transition),
+          box-shadow var(--transition);
       }
       .stat-card:hover {
         transform: translateY(-3px);
@@ -300,8 +282,15 @@
         background: var(--warn-soft);
         color: #b8860b;
       }
+      .badge-blue {
+        background: var(--primary-soft);
+        color: var(--primary);
+      }
 
-      /* ========== TABLES ========== */
+      /* ================================================================
+         CARD SECTIONS & TABLES
+         Consistent card container pattern
+         ================================================================ */
       .card-section {
         background: var(--card);
         border-radius: var(--radius);
@@ -328,6 +317,11 @@
         color: #fff;
         padding: 3px 12px;
         border-radius: 100px;
+      }
+      .section-header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
       }
 
       table {
@@ -357,6 +351,10 @@
         background: #fdfcfa;
       }
 
+      /* ================================================================
+         REUSABLE COMPONENTS
+         Skill tags, match bars, status chips, buttons
+         ================================================================ */
       .skill-tag {
         display: inline-block;
         font-size: 0.72rem;
@@ -366,7 +364,41 @@
         margin: 2px 2px;
         background: #eef1f6;
         color: var(--primary-dark);
+        transition: all var(--transition);
       }
+      .skill-tag.removable {
+        cursor: pointer;
+        padding-right: 6px;
+      }
+      .skill-tag.removable:hover {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .skill-tag .remove-x {
+        display: inline-block;
+        margin-left: 4px;
+        font-size: 0.68rem;
+        opacity: 0.6;
+      }
+      .skill-tag-add {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 100px;
+        margin: 2px;
+        background: transparent;
+        border: 1.5px dashed var(--primary);
+        color: var(--primary);
+        cursor: pointer;
+        transition: all var(--transition);
+      }
+      .skill-tag-add:hover {
+        background: var(--primary-soft);
+      }
+
       .match-bar {
         width: 80px;
         height: 7px;
@@ -423,7 +455,10 @@
         border-radius: 100px;
         border: none;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all var(--transition);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
       }
       .btn-primary {
         background: var(--primary-dark);
@@ -440,6 +475,13 @@
       }
       .btn-accent:hover {
         background: #c1303c;
+      }
+      .btn-success {
+        background: var(--success);
+        color: #fff;
+      }
+      .btn-success:hover {
+        background: #228b7e;
       }
       .btn-outline {
         background: transparent;
@@ -458,18 +500,39 @@
         background: var(--success);
         color: #fff;
       }
+      .btn-accept:hover {
+        background: #228b7e;
+      }
       .btn-reject {
         background: var(--accent);
         color: #fff;
       }
-      .btn[disabled] {
-        cursor: not-allowed;
-        opacity: 0.65;
-        transform: none;
-        box-shadow: none;
+      .btn-reject:hover {
+        background: #c1303c;
+      }
+      .btn-icon {
+        padding: 6px 10px;
+        background: transparent;
+        border: 1.5px solid var(--border);
+        border-radius: 100px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all var(--transition);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--muted);
+      }
+      .btn-icon:hover {
+        background: var(--primary-soft);
+        border-color: var(--primary);
+        color: var(--primary);
       }
 
-      /* ========== FORM ELEMENTS ========== */
+      /* ================================================================
+         FORM ELEMENTS
+         Consistent form styling (Nielsen: Consistency & standards)
+         ================================================================ */
       .form-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -501,8 +564,8 @@
         border-radius: 10px;
         background: #fff;
         transition:
-          border-color 0.2s,
-          box-shadow 0.2s;
+          border-color var(--transition),
+          box-shadow var(--transition);
         outline: none;
       }
       .form-group input:focus,
@@ -515,8 +578,41 @@
         resize: vertical;
         min-height: 90px;
       }
+      .filter-bar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 16px 24px;
+        background: #fafaf8;
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+      }
+      .filter-bar select,
+      .filter-bar input {
+        font-family: var(--font-body);
+        font-size: 0.82rem;
+        padding: 7px 14px;
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: #fff;
+        outline: none;
+        transition: border-color var(--transition);
+      }
+      .filter-bar select:focus,
+      .filter-bar input:focus {
+        border-color: var(--primary);
+      }
+      .filter-bar label {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
 
-      /* ========== SIDEBAR PANEL ========== */
+      /* ================================================================
+         TWO-COLUMN LAYOUT & SIDEBAR
+         ================================================================ */
       .two-col {
         display: grid;
         grid-template-columns: 1fr 340px;
@@ -531,6 +627,7 @@
         height: fit-content;
         position: sticky;
         top: 90px;
+        margin-bottom: 24px;
       }
       .sidebar-card h3 {
         font-size: 0.95rem;
@@ -558,7 +655,10 @@
         transition: width 0.6s ease;
       }
 
-      /* ========== AI PANEL ========== */
+      /* ================================================================
+         AI PANEL
+         Distinctive styling for AI-powered features
+         ================================================================ */
       .ai-panel {
         background: linear-gradient(135deg, #1d3557 0%, #264e70 100%);
         border-radius: var(--radius);
@@ -584,7 +684,7 @@
         margin-bottom: 12px;
       }
       .ai-panel .ai-badge::before {
-        content: "✦";
+        content: "\2726";
         font-size: 0.8rem;
       }
       .ai-suggestion {
@@ -596,41 +696,94 @@
         line-height: 1.5;
         border-left: 3px solid var(--accent);
       }
-      .toast {
-        position: fixed;
-        left: 50%;
-        bottom: 28px;
-        transform: translateX(-50%) translateY(16px);
-        min-width: 280px;
-        max-width: calc(100vw - 32px);
-        background: rgba(26, 26, 46, 0.94);
+
+      .ai-inline-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--primary-dark);
         color: #fff;
-        border-radius: 14px;
-        padding: 14px 18px;
-        box-shadow: var(--shadow-lg);
-        opacity: 0;
-        pointer-events: none;
-        transition:
-          opacity 0.25s ease,
-          transform 0.25s ease;
-        z-index: 250;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 100px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
       }
-      .toast.show {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-      }
-      .toast strong {
-        display: block;
-        margin-bottom: 3px;
-        font-size: 0.86rem;
-      }
-      .toast span {
-        display: block;
-        font-size: 0.8rem;
-        opacity: 0.85;
+      .ai-inline-badge::before {
+        content: "\2726";
+        font-size: 0.7rem;
       }
 
-      /* ========== WORKLOAD BARS ========== */
+      /* ================================================================
+         APPLICATION TIMELINE
+         Visual progress tracker for TA applications (Visibility)
+         ================================================================ */
+      .app-timeline {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        margin: 8px 0;
+      }
+      .timeline-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+        flex: 1;
+      }
+      .timeline-step .step-dot {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--border);
+        display: grid;
+        place-items: center;
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: #fff;
+        z-index: 2;
+        transition: all 0.3s;
+      }
+      .timeline-step.done .step-dot {
+        background: var(--success);
+      }
+      .timeline-step.active .step-dot {
+        background: var(--primary);
+        box-shadow: 0 0 0 4px var(--primary-soft);
+      }
+      .timeline-step.rejected .step-dot {
+        background: var(--accent);
+      }
+      .timeline-step .step-label {
+        font-size: 0.68rem;
+        color: var(--muted);
+        margin-top: 6px;
+        text-align: center;
+      }
+      .timeline-step.done .step-label {
+        color: var(--success);
+        font-weight: 600;
+      }
+      .timeline-step.active .step-label {
+        color: var(--primary);
+        font-weight: 600;
+      }
+      .timeline-connector {
+        flex: 1;
+        height: 3px;
+        background: var(--border);
+        margin: 0 -4px;
+        margin-bottom: 20px;
+      }
+      .timeline-connector.done {
+        background: var(--success);
+      }
+
+      /* ================================================================
+         WORKLOAD BARS
+         Visual workload representation (Visibility of system status)
+         ================================================================ */
       .workload-bar-container {
         margin-bottom: 14px;
       }
@@ -658,21 +811,365 @@
         color: #fff;
         transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
       }
-      .workload-limit {
-        position: absolute;
-        right: 0;
-        top: 0;
-        height: 100%;
-        border-right: 2px dashed var(--accent);
-        width: 0;
+
+      /* ================================================================
+         TOAST NOTIFICATION SYSTEM
+         Provides feedback on actions (Nielsen: Visibility of status)
+         ================================================================ */
+      .toast-container {
+        position: fixed;
+        top: 80px;
+        right: 24px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .toast {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 20px;
+        background: var(--card);
+        border-radius: var(--radius-sm);
+        box-shadow: var(--shadow-lg);
+        border-left: 4px solid var(--success);
+        font-size: 0.85rem;
+        font-weight: 500;
+        animation: toastIn 0.35s ease, toastOut 0.35s ease 2.8s forwards;
+        min-width: 280px;
+        max-width: 400px;
+      }
+      .toast.toast-error {
+        border-left-color: var(--accent);
+      }
+      .toast.toast-warn {
+        border-left-color: var(--warn);
+      }
+      .toast.toast-info {
+        border-left-color: var(--primary);
+      }
+      .toast .toast-icon {
+        font-size: 1.1rem;
+        flex-shrink: 0;
+      }
+      .toast .toast-msg {
+        flex: 1;
+      }
+      .toast .toast-close {
+        cursor: pointer;
+        opacity: 0.4;
+        font-size: 1rem;
+        background: none;
+        border: none;
+        padding: 0 4px;
+      }
+      .toast .toast-close:hover {
+        opacity: 1;
+      }
+      @keyframes toastIn {
+        from {
+          opacity: 0;
+          transform: translateX(40px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+      @keyframes toastOut {
+        to {
+          opacity: 0;
+          transform: translateX(40px);
+        }
       }
 
-      /* ========== RESPONSIVE ========== */
-      @media (max-width: 900px) {
-        .assessment-note {
-          margin: 20px 16px 0;
-          flex-direction: column;
+      /* ================================================================
+         MODAL / POPUP SYSTEM
+         AI explanation popups, detail views (User control & freedom)
+         ================================================================ */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(26, 26, 46, 0.45);
+        backdrop-filter: blur(4px);
+        z-index: 500;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-overlay.show {
+        display: flex;
+      }
+      .modal {
+        background: var(--card);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-lg);
+        width: 90%;
+        max-width: 560px;
+        max-height: 85vh;
+        overflow-y: auto;
+        animation: fadeUp 0.3s ease;
+      }
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+      .modal-header h3 {
+        font-size: 1rem;
+        font-weight: 700;
+      }
+      .modal-close {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        background: #f0eeea;
+        cursor: pointer;
+        font-size: 1.1rem;
+        display: grid;
+        place-items: center;
+        transition: background var(--transition);
+      }
+      .modal-close:hover {
+        background: var(--accent-soft);
+      }
+      .modal-body {
+        padding: 24px;
+      }
+
+      /* ================================================================
+         SYSTEM LOG VIEWER
+         Simulated log display for Admin (Match & real world)
+         ================================================================ */
+      .log-viewer {
+        background: #1a1a2e;
+        border-radius: var(--radius-sm);
+        padding: 18px;
+        font-family: "Courier New", monospace;
+        font-size: 0.78rem;
+        line-height: 1.7;
+        color: #a8dadc;
+        max-height: 320px;
+        overflow-y: auto;
+        margin: 0 24px 24px;
+      }
+      .log-viewer .log-line {
+        display: flex;
+        gap: 10px;
+        padding: 2px 0;
+      }
+      .log-viewer .log-time {
+        color: var(--muted);
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .log-viewer .log-type {
+        font-weight: 700;
+        flex-shrink: 0;
+        width: 50px;
+      }
+      .log-viewer .log-type.info {
+        color: #a8dadc;
+      }
+      .log-viewer .log-type.warn {
+        color: var(--warn);
+      }
+      .log-viewer .log-type.error {
+        color: var(--accent);
+      }
+      .log-viewer .log-type.ok {
+        color: var(--success);
+      }
+      .log-viewer .log-content {
+        color: #e0ddd8;
+      }
+
+      /* ================================================================
+         QUOTA MANAGEMENT CARD
+         Visual quota/slot management for MO
+         ================================================================ */
+      .quota-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        padding: 24px;
+      }
+      .quota-item {
+        text-align: center;
+        padding: 18px;
+        border-radius: var(--radius-sm);
+        border: 1.5px solid var(--border);
+        transition: all var(--transition);
+      }
+      .quota-item:hover {
+        border-color: var(--primary);
+        box-shadow: var(--shadow-sm);
+      }
+      .quota-item .quota-number {
+        font-family: var(--font-display);
+        font-size: 1.6rem;
+        font-weight: 700;
+      }
+      .quota-item .quota-label {
+        font-size: 0.78rem;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      .quota-actions {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .quota-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1.5px solid var(--border);
+        background: #fff;
+        cursor: pointer;
+        font-size: 1rem;
+        font-weight: 600;
+        display: grid;
+        place-items: center;
+        transition: all var(--transition);
+        color: var(--ink);
+      }
+      .quota-btn:hover {
+        background: var(--primary-soft);
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      /* ================================================================
+         FILE STORAGE SIMULATION BAR
+         Visual feedback for "saving to file" (Match real world)
+         ================================================================ */
+      .file-save-bar {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 24px;
+        background: var(--success-soft);
+        border-top: 1px solid rgba(42, 157, 143, 0.2);
+        font-size: 0.82rem;
+        color: var(--success);
+        font-weight: 500;
+      }
+      .file-save-bar.active {
+        display: flex;
+        animation: fadeUp 0.3s ease;
+      }
+      .file-save-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--success-soft);
+        border-top-color: var(--success);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
         }
+      }
+
+      /* ================================================================
+         TAB SYSTEM (sub-page tabs inside pages)
+         ================================================================ */
+      .sub-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 0 0 16px;
+      }
+      .sub-tab {
+        font-family: var(--font-body);
+        font-size: 0.82rem;
+        font-weight: 500;
+        padding: 8px 18px;
+        border-radius: var(--radius-sm);
+        border: 1.5px solid var(--border);
+        background: #fff;
+        color: var(--muted);
+        cursor: pointer;
+        transition: all var(--transition);
+      }
+      .sub-tab:hover {
+        color: var(--ink);
+      }
+      .sub-tab.active {
+        background: var(--primary-dark);
+        color: #fff;
+        border-color: var(--primary-dark);
+      }
+
+      /* ================================================================
+         AI EXPLANATION TOOLTIP
+         Hover tooltip for AI match explanations (Explanatory AI)
+         ================================================================ */
+      .ai-explain-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        position: relative;
+      }
+      .ai-explain-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--primary-soft);
+        color: var(--primary);
+        font-size: 0.65rem;
+        font-weight: 700;
+        display: inline-grid;
+        place-items: center;
+        transition: all var(--transition);
+        border: 1px solid var(--primary);
+      }
+      .ai-explain-icon:hover {
+        background: var(--primary);
+        color: #fff;
+      }
+      .ai-tooltip {
+        display: none;
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 10px;
+        background: var(--primary-dark);
+        color: #fff;
+        padding: 12px 16px;
+        border-radius: var(--radius-sm);
+        font-size: 0.78rem;
+        line-height: 1.5;
+        width: 260px;
+        box-shadow: var(--shadow-lg);
+        z-index: 50;
+        pointer-events: none;
+      }
+      .ai-tooltip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: var(--primary-dark);
+      }
+      .ai-explain-trigger:hover .ai-tooltip {
+        display: block;
+      }
+
+      /* ================================================================
+         RESPONSIVE DESIGN
+         ================================================================ */
+      @media (max-width: 900px) {
         .stats-row {
           grid-template-columns: repeat(2, 1fr);
         }
@@ -682,54 +1179,28 @@
         .form-grid {
           grid-template-columns: 1fr;
         }
+        .quota-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
       }
       @media (max-width: 600px) {
         .stats-row {
           grid-template-columns: 1fr;
         }
         .topbar {
-          height: auto;
-          min-height: 64px;
-          padding: 12px 16px;
-          gap: 12px;
-          align-items: flex-start;
-          flex-wrap: wrap;
-        }
-        .topbar nav {
-          order: 3;
-          width: 100%;
-          overflow-x: auto;
-          padding-bottom: 4px;
-        }
-        .topbar nav button {
-          white-space: nowrap;
-        }
-        .user-pill {
-          margin-left: auto;
-        }
-        .hero-banner {
-          padding: 28px 24px;
-        }
-        th,
-        td {
-          padding-left: 14px;
-          padding-right: 14px;
-        }
-        .proto-watermark {
-          position: static;
-          padding: 0 16px 18px;
-          text-align: center;
-        }
-        .toast {
-          bottom: 16px;
-          width: calc(100vw - 24px);
+          padding: 0 16px;
         }
         .dashboard {
-          padding: 20px 16px 60px;
+          padding: 14px 16px;
+        }
+        .quota-grid {
+          grid-template-columns: 1fr;
         }
       }
 
-      /* ========== WATERMARK ========== */
+      /* ================================================================
+         WATERMARK
+         ================================================================ */
       .proto-watermark {
         position: fixed;
         bottom: 16px;
@@ -743,11 +1214,16 @@
     </style>
   </head>
   <body>
+    <!-- ===== TOAST CONTAINER (fixed, for notifications) ===== -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <!-- ===== TOP NAV ===== -->
     <div class="topbar">
       <div class="logo">BUPT<span>TA</span>Recruit</div>
-      <nav>
-        <button class="active" onclick="switchRole('ta')">TA Dashboard</button>
+      <nav id="mainNav">
+        <button class="active" onclick="switchRole('ta')">
+          TA Dashboard
+        </button>
         <button onclick="switchRole('mo')">MO Portal</button>
         <button onclick="switchRole('admin')">Admin Overview</button>
       </nav>
@@ -757,21 +1233,30 @@
       </div>
     </div>
 
-    <div class="assessment-note">
-      <div>
-        <strong>Iteration 1 demo prototype</strong>
-        <p>
-          This interactive prototype highlights the key assessment journeys:
-          browsing and applying for roles, posting vacancies, reviewing
-          candidates, and managing workload recommendations.
-        </p>
+    <!-- ===== MODAL OVERLAY (shared) ===== -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h3 id="modalTitle">Detail</h3>
+          <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
       </div>
-      <div class="note-tag">Visible for Review</div>
     </div>
 
-    <!-- ===== PAGE 1: TA DASHBOARD ===== -->
+    <!-- =================================================================
+         PAGE 1: TA DASHBOARD
+         Features: Job browsing, application tracking, skill management,
+                   AI skill-gap analysis
+         ================================================================= -->
     <div id="page-ta" class="page active">
       <div class="dashboard">
+        <div class="breadcrumb">
+          <a onclick="switchRole('ta')">Home</a>
+          <span class="sep">/</span>
+          <span class="current">TA Dashboard</span>
+        </div>
+
         <div class="hero-banner">
           <h1>Welcome back, Zhang Wei</h1>
           <p>
@@ -814,166 +1299,436 @@
 
         <div class="two-col">
           <div>
-            <!-- Available Jobs -->
-            <div class="card-section">
-              <div class="section-header">
-                <h2>Available Positions</h2>
-                <span class="pill-count">6 Open</span>
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Module</th>
-                    <th>Skills Required</th>
-                    <th style="width: 110px">AI Match</th>
-                    <th>Hrs/Wk</th>
-                    <th>Deadline</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>
-                      <strong>EBU6304</strong><br /><span
-                        style="font-size: 0.78rem; color: var(--muted)"
-                        >Software Engineering</span
-                      >
-                    </td>
-                    <td>
-                      <span class="skill-tag">Java</span
-                      ><span class="skill-tag">Agile</span
-                      ><span class="skill-tag">Git</span>
-                    </td>
-                    <td>
-                      <div class="match-bar">
-                        <div class="fill fill-high" style="width: 92%"></div>
-                      </div>
-                      <strong style="color: var(--success)">92%</strong>
-                    </td>
-                    <td>8</td>
-                    <td>28 Mar</td>
-                    <td>
-                      <button class="btn btn-primary btn-sm">Apply</button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>EBU5476</strong><br /><span
-                        style="font-size: 0.78rem; color: var(--muted)"
-                        >Machine Learning</span
-                      >
-                    </td>
-                    <td>
-                      <span class="skill-tag">Python</span
-                      ><span class="skill-tag">TensorFlow</span
-                      ><span class="skill-tag">Statistics</span>
-                    </td>
-                    <td>
-                      <div class="match-bar">
-                        <div class="fill fill-mid" style="width: 65%"></div>
-                      </div>
-                      <strong style="color: #b8860b">65%</strong>
-                    </td>
-                    <td>6</td>
-                    <td>1 Apr</td>
-                    <td>
-                      <button class="btn btn-primary btn-sm">Apply</button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>EBU4201</strong><br /><span
-                        style="font-size: 0.78rem; color: var(--muted)"
-                        >Database Systems</span
-                      >
-                    </td>
-                    <td>
-                      <span class="skill-tag">SQL</span
-                      ><span class="skill-tag">Java</span>
-                    </td>
-                    <td>
-                      <div class="match-bar">
-                        <div class="fill fill-high" style="width: 85%"></div>
-                      </div>
-                      <strong style="color: var(--success)">85%</strong>
-                    </td>
-                    <td>6</td>
-                    <td>5 Apr</td>
-                    <td>
-                      <button class="btn btn-primary btn-sm">Apply</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <!-- TA Sub-tabs -->
+            <div class="sub-tabs">
+              <button class="sub-tab active" onclick="switchTATab('positions')">
+                Available Positions
+              </button>
+              <button
+                class="sub-tab"
+                onclick="switchTATab('applications')"
+              >
+                My Applications
+              </button>
             </div>
 
-            <!-- My Applications -->
-            <div class="card-section">
-              <div class="section-header">
-                <h2>My Applications</h2>
-                <span class="pill-count">4 Total</span>
+            <!-- Available Positions -->
+            <div id="ta-tab-positions">
+              <div class="card-section">
+                <div class="section-header">
+                  <h2>Available Positions</h2>
+                  <span class="pill-count">6 Open</span>
+                </div>
+                <!-- AI Sort filter -->
+                <div class="filter-bar">
+                  <label>Sort by:</label>
+                  <select onchange="showToast('Positions re-sorted by ' + this.value, 'info')">
+                    <option value="AI Match Score">AI Match Score</option>
+                    <option value="Deadline">Deadline</option>
+                    <option value="Hours/Week">Hours/Week</option>
+                  </select>
+                  <label style="margin-left: 12px">Skill filter:</label>
+                  <select onchange="showToast('Filtered by skill: ' + this.value, 'info')">
+                    <option value="">All Skills</option>
+                    <option>Java</option>
+                    <option>Python</option>
+                    <option>SQL</option>
+                    <option>Git</option>
+                    <option>Agile</option>
+                  </select>
+                  <label style="margin-left: 12px">Min Match:</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="0"
+                    style="width: 100px"
+                    oninput="this.nextElementSibling.textContent = this.value + '%'"
+                  />
+                  <span style="font-size: 0.82rem; font-weight: 600">0%</span>
+                </div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Module</th>
+                      <th>Skills Required</th>
+                      <th style="width: 140px">AI Match</th>
+                      <th>Hrs/Wk</th>
+                      <th>Deadline</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <strong>EBU6304</strong><br />
+                        <span style="font-size: 0.78rem; color: var(--muted)">
+                          Software Engineering
+                        </span>
+                      </td>
+                      <td>
+                        <span class="skill-tag">Java</span>
+                        <span class="skill-tag">Agile</span>
+                        <span class="skill-tag">Git</span>
+                      </td>
+                      <td>
+                        <div class="ai-explain-trigger">
+                          <div class="match-bar">
+                            <div
+                              class="fill fill-high"
+                              style="width: 92%"
+                            ></div>
+                          </div>
+                          <strong style="color: var(--success)">92%</strong>
+                          <span class="ai-explain-icon">AI</span>
+                          <div class="ai-tooltip">
+                            <strong>AI Match Breakdown:</strong><br />
+                            Skill overlap: 3/3 (100%)<br />
+                            GPA relevance: High<br />
+                            Availability: 12h free, 8h needed<br />
+                            <em>Recommended — strong fit</em>
+                          </div>
+                        </div>
+                      </td>
+                      <td>8</td>
+                      <td>28 Mar</td>
+                      <td>
+                        <button
+                          class="btn btn-primary btn-sm"
+                          onclick="simulateApply('EBU6304')"
+                        >
+                          Apply
+                        </button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <strong>EBU5476</strong><br />
+                        <span style="font-size: 0.78rem; color: var(--muted)">
+                          Machine Learning
+                        </span>
+                      </td>
+                      <td>
+                        <span class="skill-tag">Python</span>
+                        <span class="skill-tag">TensorFlow</span>
+                        <span class="skill-tag">Statistics</span>
+                      </td>
+                      <td>
+                        <div class="ai-explain-trigger">
+                          <div class="match-bar">
+                            <div
+                              class="fill fill-mid"
+                              style="width: 65%"
+                            ></div>
+                          </div>
+                          <strong style="color: #b8860b">65%</strong>
+                          <span class="ai-explain-icon">AI</span>
+                          <div class="ai-tooltip">
+                            <strong>AI Match Breakdown:</strong><br />
+                            Skill overlap: 1/3 (Python only)<br />
+                            Missing: TensorFlow, Statistics<br />
+                            GPA relevance: Medium<br />
+                            <em>Consider adding missing skills</em>
+                          </div>
+                        </div>
+                      </td>
+                      <td>6</td>
+                      <td>1 Apr</td>
+                      <td>
+                        <button
+                          class="btn btn-primary btn-sm"
+                          onclick="simulateApply('EBU5476')"
+                        >
+                          Apply
+                        </button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <strong>EBU4201</strong><br />
+                        <span style="font-size: 0.78rem; color: var(--muted)">
+                          Database Systems
+                        </span>
+                      </td>
+                      <td>
+                        <span class="skill-tag">SQL</span>
+                        <span class="skill-tag">Java</span>
+                      </td>
+                      <td>
+                        <div class="ai-explain-trigger">
+                          <div class="match-bar">
+                            <div
+                              class="fill fill-high"
+                              style="width: 85%"
+                            ></div>
+                          </div>
+                          <strong style="color: var(--success)">85%</strong>
+                          <span class="ai-explain-icon">AI</span>
+                          <div class="ai-tooltip">
+                            <strong>AI Match Breakdown:</strong><br />
+                            Skill overlap: 2/2 (100%)<br />
+                            GPA relevance: High<br />
+                            Availability: Sufficient<br />
+                            <em>Good match — apply recommended</em>
+                          </div>
+                        </div>
+                      </td>
+                      <td>6</td>
+                      <td>5 Apr</td>
+                      <td>
+                        <button
+                          class="btn btn-primary btn-sm"
+                          onclick="simulateApply('EBU4201')"
+                        >
+                          Apply
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Module</th>
-                    <th>Applied On</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>EBU5304</strong> — Internet Protocols</td>
-                    <td>10 Mar 2026</td>
-                    <td>
-                      <span class="status-chip status-accepted">Accepted</span>
-                    </td>
-                    <td>
-                      <button class="btn btn-outline btn-sm">View</button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td><strong>EBU6304</strong> — Software Engineering</td>
-                    <td>14 Mar 2026</td>
-                    <td>
-                      <span class="status-chip status-review"
+            </div>
+
+            <!-- My Applications (with timeline tracker) -->
+            <div id="ta-tab-applications" style="display: none">
+              <div class="card-section">
+                <div class="section-header">
+                  <h2>My Applications</h2>
+                  <span class="pill-count">4 Total</span>
+                </div>
+
+                <!-- Application 1: Accepted -->
+                <div style="padding: 20px 24px; border-bottom: 1px solid #f0eeea">
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: start;
+                    "
+                  >
+                    <div>
+                      <strong>EBU5304</strong> — Internet Protocols
+                      <span
+                        class="status-chip status-accepted"
+                        style="margin-left: 10px"
+                        >Accepted</span
+                      >
+                      <div
+                        style="
+                          font-size: 0.8rem;
+                          color: var(--muted);
+                          margin-top: 4px;
+                        "
+                      >
+                        Applied: 10 Mar 2026
+                      </div>
+                    </div>
+                    <button
+                      class="btn btn-outline btn-sm"
+                      onclick="openAppDetail('EBU5304', 'accepted')"
+                    >
+                      View Detail
+                    </button>
+                  </div>
+                  <div class="app-timeline" style="margin-top: 14px">
+                    <div class="timeline-step done">
+                      <div class="step-dot">&#10003;</div>
+                      <div class="step-label">Submitted</div>
+                    </div>
+                    <div class="timeline-connector done"></div>
+                    <div class="timeline-step done">
+                      <div class="step-dot">&#10003;</div>
+                      <div class="step-label">Under Review</div>
+                    </div>
+                    <div class="timeline-connector done"></div>
+                    <div class="timeline-step done">
+                      <div class="step-dot">&#10003;</div>
+                      <div class="step-label">Interview</div>
+                    </div>
+                    <div class="timeline-connector done"></div>
+                    <div class="timeline-step done">
+                      <div class="step-dot">&#10003;</div>
+                      <div class="step-label">Accepted</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Application 2: Under Review -->
+                <div style="padding: 20px 24px; border-bottom: 1px solid #f0eeea">
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: start;
+                    "
+                  >
+                    <div>
+                      <strong>EBU6304</strong> — Software Engineering
+                      <span
+                        class="status-chip status-review"
+                        style="margin-left: 10px"
                         >Under Review</span
                       >
-                    </td>
-                    <td>
-                      <button class="btn btn-outline btn-sm">View</button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td><strong>EBU5102</strong> — Computer Networks</td>
-                    <td>8 Mar 2026</td>
-                    <td>
-                      <span class="status-chip status-submitted"
+                      <div
+                        style="
+                          font-size: 0.8rem;
+                          color: var(--muted);
+                          margin-top: 4px;
+                        "
+                      >
+                        Applied: 14 Mar 2026
+                      </div>
+                    </div>
+                    <button
+                      class="btn btn-outline btn-sm"
+                      onclick="openAppDetail('EBU6304', 'review')"
+                    >
+                      View Detail
+                    </button>
+                  </div>
+                  <div class="app-timeline" style="margin-top: 14px">
+                    <div class="timeline-step done">
+                      <div class="step-dot">&#10003;</div>
+                      <div class="step-label">Submitted</div>
+                    </div>
+                    <div class="timeline-connector done"></div>
+                    <div class="timeline-step active">
+                      <div class="step-dot">2</div>
+                      <div class="step-label">Under Review</div>
+                    </div>
+                    <div class="timeline-connector"></div>
+                    <div class="timeline-step">
+                      <div class="step-dot">3</div>
+                      <div class="step-label">Interview</div>
+                    </div>
+                    <div class="timeline-connector"></div>
+                    <div class="timeline-step">
+                      <div class="step-dot">4</div>
+                      <div class="step-label">Decision</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Application 3: Submitted -->
+                <div style="padding: 20px 24px; border-bottom: 1px solid #f0eeea">
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: start;
+                    "
+                  >
+                    <div>
+                      <strong>EBU5102</strong> — Computer Networks
+                      <span
+                        class="status-chip status-submitted"
+                        style="margin-left: 10px"
                         >Submitted</span
                       >
-                    </td>
-                    <td>
-                      <button class="btn btn-outline btn-sm">View</button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td><strong>EBU4010</strong> — Intro to Programming</td>
-                    <td>5 Mar 2026</td>
-                    <td>
-                      <span class="status-chip status-rejected">Rejected</span>
-                    </td>
-                    <td>
-                      <button class="btn btn-outline btn-sm">View</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      <div
+                        style="
+                          font-size: 0.8rem;
+                          color: var(--muted);
+                          margin-top: 4px;
+                        "
+                      >
+                        Applied: 8 Mar 2026
+                      </div>
+                    </div>
+                    <button
+                      class="btn btn-outline btn-sm"
+                      onclick="openAppDetail('EBU5102', 'submitted')"
+                    >
+                      View Detail
+                    </button>
+                  </div>
+                  <div class="app-timeline" style="margin-top: 14px">
+                    <div class="timeline-step active">
+                      <div class="step-dot">1</div>
+                      <div class="step-label">Submitted</div>
+                    </div>
+                    <div class="timeline-connector"></div>
+                    <div class="timeline-step">
+                      <div class="step-dot">2</div>
+                      <div class="step-label">Under Review</div>
+                    </div>
+                    <div class="timeline-connector"></div>
+                    <div class="timeline-step">
+                      <div class="step-dot">3</div>
+                      <div class="step-label">Interview</div>
+                    </div>
+                    <div class="timeline-connector"></div>
+                    <div class="timeline-step">
+                      <div class="step-dot">4</div>
+                      <div class="step-label">Decision</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Application 4: Rejected -->
+                <div style="padding: 20px 24px">
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: start;
+                    "
+                  >
+                    <div>
+                      <strong>EBU4010</strong> — Intro to Programming
+                      <span
+                        class="status-chip status-rejected"
+                        style="margin-left: 10px"
+                        >Rejected</span
+                      >
+                      <div
+                        style="
+                          font-size: 0.8rem;
+                          color: var(--muted);
+                          margin-top: 4px;
+                        "
+                      >
+                        Applied: 5 Mar 2026
+                      </div>
+                    </div>
+                    <button
+                      class="btn btn-outline btn-sm"
+                      onclick="openAppDetail('EBU4010', 'rejected')"
+                    >
+                      View Detail
+                    </button>
+                  </div>
+                  <div class="app-timeline" style="margin-top: 14px">
+                    <div class="timeline-step done">
+                      <div class="step-dot">&#10003;</div>
+                      <div class="step-label">Submitted</div>
+                    </div>
+                    <div class="timeline-connector done"></div>
+                    <div class="timeline-step done">
+                      <div class="step-dot">&#10003;</div>
+                      <div class="step-label">Under Review</div>
+                    </div>
+                    <div class="timeline-connector"></div>
+                    <div class="timeline-step rejected">
+                      <div class="step-dot">&times;</div>
+                      <div class="step-label" style="color: var(--accent)">
+                        Rejected
+                      </div>
+                    </div>
+                    <div class="timeline-connector"></div>
+                    <div class="timeline-step" style="opacity: 0.3">
+                      <div class="step-dot">-</div>
+                      <div class="step-label">N/A</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- SIDEBAR -->
+          <!-- TA SIDEBAR -->
           <div>
+            <!-- AI Skills Gap Analysis -->
             <div class="ai-panel">
               <div class="ai-badge">AI-Powered Insight</div>
               <h3>Skills Gap Analysis</h3>
@@ -983,12 +1738,21 @@
               <div class="ai-suggestion">
                 <strong>Missing Skills:</strong> TensorFlow, Docker, REST
                 APIs<br />
-                <span style="opacity: 0.85"
-                  >Adding these 3 skills could increase your average match score
-                  from 78% to an estimated 89%.</span
-                >
+                <span style="opacity: 0.85">
+                  Adding these 3 skills could increase your average match score
+                  from 78% to an estimated 89%.
+                </span>
+              </div>
+              <div class="ai-suggestion" style="border-left-color: var(--warn)">
+                <strong>Trending This Semester:</strong><br />
+                <span style="opacity: 0.85">
+                  Kubernetes (+40% demand), React (+35%), Data Analysis (+28%).
+                  Consider upskilling in these areas.
+                </span>
               </div>
             </div>
+
+            <!-- Profile & Skill Tag Management -->
             <div class="sidebar-card">
               <h3>My Profile Summary</h3>
               <div
@@ -1002,10 +1766,10 @@
               </div>
               <div class="progress-item">
                 <div class="prog-label">
-                  <span>Profile Completeness</span
-                  ><span style="font-weight: 700; color: var(--success)"
-                    >85%</span
-                  >
+                  <span>Profile Completeness</span>
+                  <span style="font-weight: 700; color: var(--success)">
+                    85%
+                  </span>
                 </div>
                 <div class="prog-track">
                   <div
@@ -1020,26 +1784,57 @@
                     font-size: 0.8rem;
                     font-weight: 600;
                     margin-bottom: 8px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
                   "
                 >
-                  My Skills
+                  <span>My Skills</span>
+                  <span
+                    style="
+                      font-size: 0.72rem;
+                      color: var(--muted);
+                      font-weight: 400;
+                    "
+                  >
+                    Click &times; to remove
+                  </span>
                 </div>
-                <span class="skill-tag">Java</span
-                ><span class="skill-tag">Python</span
-                ><span class="skill-tag">Git</span
-                ><span class="skill-tag">SQL</span
-                ><span class="skill-tag">Agile</span
-                ><span class="skill-tag">HTML/CSS</span>
+                <div id="skillTagContainer">
+                  <span class="skill-tag removable" onclick="removeSkill(this)">
+                    Java <span class="remove-x">&times;</span>
+                  </span>
+                  <span class="skill-tag removable" onclick="removeSkill(this)">
+                    Python <span class="remove-x">&times;</span>
+                  </span>
+                  <span class="skill-tag removable" onclick="removeSkill(this)">
+                    Git <span class="remove-x">&times;</span>
+                  </span>
+                  <span class="skill-tag removable" onclick="removeSkill(this)">
+                    SQL <span class="remove-x">&times;</span>
+                  </span>
+                  <span class="skill-tag removable" onclick="removeSkill(this)">
+                    Agile <span class="remove-x">&times;</span>
+                  </span>
+                  <span class="skill-tag removable" onclick="removeSkill(this)">
+                    HTML/CSS <span class="remove-x">&times;</span>
+                  </span>
+                  <button class="skill-tag-add" onclick="addSkillPrompt()">
+                    + Add Skill
+                  </button>
+                </div>
               </div>
               <button
                 class="btn btn-outline"
                 style="width: 100%; margin-top: 18px"
+                onclick="openEditProfileModal()"
               >
                 Edit Profile
               </button>
               <button
                 class="btn btn-primary"
                 style="width: 100%; margin-top: 10px"
+                onclick="simulateUploadCV()"
               >
                 Upload CV
               </button>
@@ -1049,17 +1844,29 @@
       </div>
     </div>
 
-    <!-- ===== PAGE 2: MO PORTAL ===== -->
+    <!-- =================================================================
+         PAGE 2: MODULE ORGANISER PORTAL
+         Features: Post positions, review applicants with AI ranking,
+                   quota management, AI explanation popups
+         ================================================================= -->
     <div id="page-mo" class="page">
       <div class="dashboard">
+        <div class="breadcrumb">
+          <a onclick="switchRole('mo')">Home</a>
+          <span class="sep">/</span>
+          <span class="current">MO Portal</span>
+        </div>
+
         <div
           class="hero-banner"
-          style="background: linear-gradient(135deg, #264653 0%, #2a9d8f 100%)"
+          style="
+            background: linear-gradient(135deg, #264653 0%, #2a9d8f 100%);
+          "
         >
           <h1>Module Organiser Portal</h1>
           <p>
-            Manage your TA postings, review applications, and leverage AI-ranked
-            candidate lists.
+            Manage your TA postings, review applications, and leverage
+            AI-ranked candidate lists.
           </p>
         </div>
 
@@ -1086,219 +1893,541 @@
           </div>
         </div>
 
+        <!-- MO Sub-tabs -->
+        <div class="sub-tabs">
+          <button class="sub-tab active" onclick="switchMOTab('postings')">
+            Post Position
+          </button>
+          <button class="sub-tab" onclick="switchMOTab('applicants')">
+            Review Applicants
+          </button>
+          <button class="sub-tab" onclick="switchMOTab('quotas')">
+            Manage Quotas
+          </button>
+        </div>
+
         <!-- Post New Job Form -->
-        <div class="card-section">
-          <div class="section-header">
-            <h2>Post a New TA Position</h2>
-          </div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Module Code</label>
-              <input type="text" placeholder="e.g. EBU6304" />
+        <div id="mo-tab-postings">
+          <div class="card-section">
+            <div class="section-header">
+              <h2>Post a New TA Position</h2>
             </div>
-            <div class="form-group">
-              <label>Module Name</label>
-              <input type="text" placeholder="e.g. Software Engineering" />
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Module Code</label>
+                <input type="text" placeholder="e.g. EBU6304" id="moCode" />
+              </div>
+              <div class="form-group">
+                <label>Module Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Software Engineering"
+                  id="moName"
+                />
+              </div>
+              <div class="form-group">
+                <label>Required Skills</label>
+                <input
+                  type="text"
+                  placeholder="Java, Agile, Git (comma separated)"
+                  id="moSkills"
+                />
+              </div>
+              <div class="form-group">
+                <label>Hours per Week</label>
+                <select id="moHours">
+                  <option>4 hours</option>
+                  <option>6 hours</option>
+                  <option selected>8 hours</option>
+                  <option>10 hours</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Application Deadline</label>
+                <input type="date" value="2026-04-15" id="moDeadline" />
+              </div>
+              <div class="form-group">
+                <label>Number of TA Slots</label>
+                <select id="moSlots">
+                  <option>1</option>
+                  <option selected>2</option>
+                  <option>3</option>
+                  <option>4</option>
+                  <option>5</option>
+                </select>
+              </div>
+              <div class="form-group full">
+                <label>Job Description</label>
+                <textarea
+                  placeholder="Describe responsibilities, preferred qualifications, and any additional information..."
+                  id="moDesc"
+                ></textarea>
+              </div>
+              <div
+                class="form-group full"
+                style="
+                  flex-direction: row;
+                  gap: 12px;
+                  justify-content: flex-end;
+                "
+              >
+                <button
+                  class="btn btn-outline"
+                  onclick="simulateSaveDraft()"
+                >
+                  Save as Draft
+                </button>
+                <button
+                  class="btn btn-primary"
+                  onclick="simulatePublish()"
+                >
+                  Publish Position
+                </button>
+              </div>
             </div>
-            <div class="form-group">
-              <label>Required Skills</label>
-              <input
-                type="text"
-                placeholder="Java, Agile, Git (comma separated)"
-              />
-            </div>
-            <div class="form-group">
-              <label>Hours per Week</label>
-              <select>
-                <option>4 hours</option>
-                <option>6 hours</option>
-                <option selected>8 hours</option>
-                <option>10 hours</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Application Deadline</label>
-              <input type="date" value="2026-04-15" />
-            </div>
-            <div class="form-group">
-              <label>Semester</label>
-              <select>
-                <option selected>2025-26 Spring</option>
-                <option>2025-26 Autumn</option>
-              </select>
-            </div>
-            <div class="form-group full">
-              <label>Job Description</label>
-              <textarea
-                placeholder="Describe responsibilities, preferred qualifications, and any additional information..."
-              ></textarea>
-            </div>
-            <div
-              class="form-group full"
-              style="flex-direction: row; gap: 12px; justify-content: flex-end"
-            >
-              <button class="btn btn-outline">Save as Draft</button>
-              <button class="btn btn-primary">Publish Position</button>
+            <div class="file-save-bar" id="moFileSaveBar">
+              <div class="file-save-spinner"></div>
+              <span>Saving to positions_data.txt ...</span>
             </div>
           </div>
         </div>
 
         <!-- Review Applicants -->
-        <div class="card-section">
-          <div class="section-header">
-            <h2>Applicants for EBU6304 — Software Engineering</h2>
-            <div style="display: flex; gap: 8px; align-items: center">
-              <div
-                class="ai-badge"
-                style="
-                  background: var(--primary-dark);
-                  color: #fff;
-                  font-size: 0.68rem;
-                  padding: 4px 12px;
-                  border-radius: 100px;
-                  margin: 0;
-                "
-              >
-                ✦ AI Ranked
+        <div id="mo-tab-applicants" style="display: none">
+          <div class="card-section">
+            <div class="section-header">
+              <h2>Applicants for EBU6304 — Software Engineering</h2>
+              <div class="section-header-actions">
+                <span class="ai-inline-badge">AI Ranked</span>
+                <span class="pill-count">8 Applicants</span>
               </div>
-              <span class="pill-count">8 Applicants</span>
+            </div>
+            <!-- AI Filter Bar -->
+            <div class="filter-bar">
+              <label>Sort by:</label>
+              <select onchange="showToast('Re-sorted by ' + this.value, 'info')">
+                <option>AI Composite Score</option>
+                <option>Skill Match</option>
+                <option>GPA</option>
+                <option>Availability</option>
+              </select>
+              <label style="margin-left: 12px">Status:</label>
+              <select onchange="showToast('Filtered: ' + this.value, 'info')">
+                <option>All</option>
+                <option>Under Review</option>
+                <option>Submitted</option>
+                <option>Accepted</option>
+                <option>Rejected</option>
+              </select>
+              <label style="margin-left: 12px">Min Score:</label>
+              <input
+                type="number"
+                placeholder="0"
+                min="0"
+                max="100"
+                style="width: 70px"
+              />
+              <button
+                class="btn btn-sm btn-primary"
+                style="margin-left: auto"
+                onclick="showToast('Filters applied successfully', 'success')"
+              >
+                Apply Filters
+              </button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Applicant</th>
+                  <th>Skills</th>
+                  <th>GPA</th>
+                  <th>AI Score</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong style="color: var(--success)">#1</strong></td>
+                  <td>
+                    <strong>Zhang Wei</strong><br />
+                    <span style="font-size: 0.78rem; color: var(--muted)">
+                      Year 3 &middot; 12 hrs available
+                    </span>
+                  </td>
+                  <td>
+                    <span class="skill-tag">Java</span>
+                    <span class="skill-tag">Agile</span>
+                    <span class="skill-tag">Git</span>
+                  </td>
+                  <td>3.7</td>
+                  <td>
+                    <div class="ai-explain-trigger">
+                      <div class="match-bar">
+                        <div
+                          class="fill fill-high"
+                          style="width: 92%"
+                        ></div>
+                      </div>
+                      <strong style="color: var(--success)">92</strong>
+                      <span class="ai-explain-icon">AI</span>
+                      <div class="ai-tooltip">
+                        <strong>AI Recommendation:</strong><br />
+                        All 3 required skills matched.<br />
+                        GPA is above department average (3.4).<br />
+                        12h available — sufficient for 8h role.<br />
+                        Previous TA experience: Yes<br />
+                        <em style="color: var(--success)"
+                          >&#9733; Highly Recommended</em
+                        >
+                      </div>
+                    </div>
+                    <div
+                      style="
+                        font-size: 0.68rem;
+                        color: var(--muted);
+                        margin-top: 2px;
+                      "
+                    >
+                      Skill: 95 &middot; GPA: 88 &middot; Avail: 92
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-chip status-review">Under Review</span>
+                  </td>
+                  <td>
+                    <button
+                      class="btn btn-accept btn-sm"
+                      onclick="simulateAccept('Zhang Wei')"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      class="btn btn-reject btn-sm"
+                      onclick="simulateReject('Zhang Wei')"
+                    >
+                      Reject
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong style="color: var(--success)">#2</strong></td>
+                  <td>
+                    <strong>Li Mei</strong><br />
+                    <span style="font-size: 0.78rem; color: var(--muted)">
+                      Year 2 &middot; 16 hrs available
+                    </span>
+                  </td>
+                  <td>
+                    <span class="skill-tag">Java</span>
+                    <span class="skill-tag">Git</span>
+                    <span class="skill-tag">SQL</span>
+                  </td>
+                  <td>3.5</td>
+                  <td>
+                    <div class="ai-explain-trigger">
+                      <div class="match-bar">
+                        <div
+                          class="fill fill-high"
+                          style="width: 84%"
+                        ></div>
+                      </div>
+                      <strong style="color: var(--success)">84</strong>
+                      <span class="ai-explain-icon">AI</span>
+                      <div class="ai-tooltip">
+                        <strong>AI Recommendation:</strong><br />
+                        2/3 required skills matched.<br />
+                        Missing: Agile (minor gap).<br />
+                        16h available — ample capacity.<br />
+                        <em>Good candidate — minor skill gap</em>
+                      </div>
+                    </div>
+                    <div
+                      style="
+                        font-size: 0.68rem;
+                        color: var(--muted);
+                        margin-top: 2px;
+                      "
+                    >
+                      Skill: 80 &middot; GPA: 82 &middot; Avail: 95
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-chip status-submitted">Submitted</span>
+                  </td>
+                  <td>
+                    <button
+                      class="btn btn-accept btn-sm"
+                      onclick="simulateAccept('Li Mei')"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      class="btn btn-reject btn-sm"
+                      onclick="simulateReject('Li Mei')"
+                    >
+                      Reject
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>#3</strong></td>
+                  <td>
+                    <strong>Wang Hao</strong><br />
+                    <span style="font-size: 0.78rem; color: var(--muted)">
+                      Year 3 &middot; 6 hrs available
+                    </span>
+                  </td>
+                  <td>
+                    <span class="skill-tag">Java</span>
+                    <span class="skill-tag">Python</span>
+                  </td>
+                  <td>3.3</td>
+                  <td>
+                    <div class="ai-explain-trigger">
+                      <div class="match-bar">
+                        <div
+                          class="fill fill-mid"
+                          style="width: 68%"
+                        ></div>
+                      </div>
+                      <strong style="color: #b8860b">68</strong>
+                      <span class="ai-explain-icon">AI</span>
+                      <div class="ai-tooltip">
+                        <strong>AI Recommendation:</strong><br />
+                        1/3 required skills matched.<br />
+                        Missing: Agile, Git.<br />
+                        6h available — tight for 8h role.<br />
+                        <em style="color: #b8860b"
+                          >Moderate fit — availability concern</em
+                        >
+                      </div>
+                    </div>
+                    <div
+                      style="
+                        font-size: 0.68rem;
+                        color: var(--muted);
+                        margin-top: 2px;
+                      "
+                    >
+                      Skill: 60 &middot; GPA: 76 &middot; Avail: 70
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-chip status-submitted">Submitted</span>
+                  </td>
+                  <td>
+                    <button
+                      class="btn btn-accept btn-sm"
+                      onclick="simulateAccept('Wang Hao')"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      class="btn btn-reject btn-sm"
+                      onclick="simulateReject('Wang Hao')"
+                    >
+                      Reject
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Quota Management -->
+        <div id="mo-tab-quotas" style="display: none">
+          <div class="card-section">
+            <div class="section-header">
+              <h2>TA Slot Management</h2>
+              <button
+                class="btn btn-sm btn-primary"
+                onclick="simulateSaveQuotas()"
+              >
+                Save Changes
+              </button>
+            </div>
+            <div class="quota-grid">
+              <div class="quota-item">
+                <div
+                  style="
+                    font-size: 0.78rem;
+                    font-weight: 600;
+                    margin-bottom: 6px;
+                  "
+                >
+                  EBU6304
+                </div>
+                <div
+                  style="
+                    font-size: 0.72rem;
+                    color: var(--muted);
+                    margin-bottom: 8px;
+                  "
+                >
+                  Software Engineering
+                </div>
+                <div class="quota-number" style="color: var(--primary-dark)">
+                  1 / 2
+                </div>
+                <div class="quota-label">Accepted / Total Slots</div>
+                <div class="quota-actions">
+                  <button class="quota-btn" onclick="adjustQuota(this, -1)">
+                    &minus;
+                  </button>
+                  <button class="quota-btn" onclick="adjustQuota(this, 1)">
+                    +
+                  </button>
+                </div>
+                <div
+                  style="
+                    margin-top: 10px;
+                    height: 6px;
+                    background: #eee;
+                    border-radius: 10px;
+                    overflow: hidden;
+                  "
+                >
+                  <div
+                    style="
+                      width: 50%;
+                      height: 100%;
+                      background: var(--primary);
+                      border-radius: 10px;
+                    "
+                  ></div>
+                </div>
+              </div>
+              <div class="quota-item">
+                <div
+                  style="
+                    font-size: 0.78rem;
+                    font-weight: 600;
+                    margin-bottom: 6px;
+                  "
+                >
+                  EBU5476
+                </div>
+                <div
+                  style="
+                    font-size: 0.72rem;
+                    color: var(--muted);
+                    margin-bottom: 8px;
+                  "
+                >
+                  Machine Learning
+                </div>
+                <div class="quota-number" style="color: var(--success)">
+                  3 / 3
+                </div>
+                <div class="quota-label">Accepted / Total Slots</div>
+                <div class="quota-actions">
+                  <button class="quota-btn" onclick="adjustQuota(this, -1)">
+                    &minus;
+                  </button>
+                  <button class="quota-btn" onclick="adjustQuota(this, 1)">
+                    +
+                  </button>
+                </div>
+                <div
+                  style="
+                    margin-top: 10px;
+                    height: 6px;
+                    background: #eee;
+                    border-radius: 10px;
+                    overflow: hidden;
+                  "
+                >
+                  <div
+                    style="
+                      width: 100%;
+                      height: 100%;
+                      background: var(--success);
+                      border-radius: 10px;
+                    "
+                  ></div>
+                </div>
+              </div>
+              <div class="quota-item">
+                <div
+                  style="
+                    font-size: 0.78rem;
+                    font-weight: 600;
+                    margin-bottom: 6px;
+                  "
+                >
+                  EBU4201
+                </div>
+                <div
+                  style="
+                    font-size: 0.72rem;
+                    color: var(--muted);
+                    margin-bottom: 8px;
+                  "
+                >
+                  Database Systems
+                </div>
+                <div class="quota-number" style="color: var(--accent)">
+                  0 / 2
+                </div>
+                <div class="quota-label">Accepted / Total Slots</div>
+                <div class="quota-actions">
+                  <button class="quota-btn" onclick="adjustQuota(this, -1)">
+                    &minus;
+                  </button>
+                  <button class="quota-btn" onclick="adjustQuota(this, 1)">
+                    +
+                  </button>
+                </div>
+                <div
+                  style="
+                    margin-top: 10px;
+                    height: 6px;
+                    background: #eee;
+                    border-radius: 10px;
+                    overflow: hidden;
+                  "
+                >
+                  <div
+                    style="
+                      width: 0%;
+                      height: 100%;
+                      background: var(--accent);
+                      border-radius: 10px;
+                    "
+                  ></div>
+                </div>
+              </div>
+            </div>
+            <div class="file-save-bar" id="quotaFileSaveBar">
+              <div class="file-save-spinner"></div>
+              <span>Saving to quota_data.txt ...</span>
             </div>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Applicant</th>
-                <th>Skills</th>
-                <th>GPA</th>
-                <th>AI Score</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong style="color: var(--success)">#1</strong></td>
-                <td>
-                  <strong>Zhang Wei</strong><br /><span
-                    style="font-size: 0.78rem; color: var(--muted)"
-                    >Year 3 · 12 hrs available</span
-                  >
-                </td>
-                <td>
-                  <span class="skill-tag">Java</span
-                  ><span class="skill-tag">Agile</span
-                  ><span class="skill-tag">Git</span>
-                </td>
-                <td>3.7</td>
-                <td>
-                  <div class="match-bar">
-                    <div class="fill fill-high" style="width: 92%"></div>
-                  </div>
-                  <strong style="color: var(--success)">92</strong>
-                  <div
-                    style="
-                      font-size: 0.68rem;
-                      color: var(--muted);
-                      margin-top: 2px;
-                    "
-                  >
-                    Skill: 95 · GPA: 88 · Avail: 92
-                  </div>
-                </td>
-                <td>
-                  <span class="status-chip status-review">Under Review</span>
-                </td>
-                <td>
-                  <button class="btn btn-accept btn-sm">Accept</button>
-                  <button class="btn btn-reject btn-sm">Reject</button>
-                </td>
-              </tr>
-              <tr>
-                <td><strong style="color: var(--success)">#2</strong></td>
-                <td>
-                  <strong>Li Mei</strong><br /><span
-                    style="font-size: 0.78rem; color: var(--muted)"
-                    >Year 2 · 16 hrs available</span
-                  >
-                </td>
-                <td>
-                  <span class="skill-tag">Java</span
-                  ><span class="skill-tag">Git</span
-                  ><span class="skill-tag">SQL</span>
-                </td>
-                <td>3.5</td>
-                <td>
-                  <div class="match-bar">
-                    <div class="fill fill-high" style="width: 84%"></div>
-                  </div>
-                  <strong style="color: var(--success)">84</strong>
-                  <div
-                    style="
-                      font-size: 0.68rem;
-                      color: var(--muted);
-                      margin-top: 2px;
-                    "
-                  >
-                    Skill: 80 · GPA: 82 · Avail: 95
-                  </div>
-                </td>
-                <td>
-                  <span class="status-chip status-submitted">Submitted</span>
-                </td>
-                <td>
-                  <button class="btn btn-accept btn-sm">Accept</button>
-                  <button class="btn btn-reject btn-sm">Reject</button>
-                </td>
-              </tr>
-              <tr>
-                <td><strong>#3</strong></td>
-                <td>
-                  <strong>Wang Hao</strong><br /><span
-                    style="font-size: 0.78rem; color: var(--muted)"
-                    >Year 3 · 6 hrs available</span
-                  >
-                </td>
-                <td>
-                  <span class="skill-tag">Java</span
-                  ><span class="skill-tag">Python</span>
-                </td>
-                <td>3.3</td>
-                <td>
-                  <div class="match-bar">
-                    <div class="fill fill-mid" style="width: 68%"></div>
-                  </div>
-                  <strong style="color: #b8860b">68</strong>
-                  <div
-                    style="
-                      font-size: 0.68rem;
-                      color: var(--muted);
-                      margin-top: 2px;
-                    "
-                  >
-                    Skill: 60 · GPA: 76 · Avail: 70
-                  </div>
-                </td>
-                <td>
-                  <span class="status-chip status-submitted">Submitted</span>
-                </td>
-                <td>
-                  <button class="btn btn-accept btn-sm">Accept</button>
-                  <button class="btn btn-reject btn-sm">Reject</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
 
-    <!-- ===== PAGE 3: ADMIN OVERVIEW ===== -->
+    <!-- =================================================================
+         PAGE 3: ADMIN OVERVIEW
+         Features: Workload monitoring, recruitment summary, system logs,
+                   AI rebalancing, file storage simulation
+         ================================================================= -->
     <div id="page-admin" class="page">
       <div class="dashboard">
+        <div class="breadcrumb">
+          <a onclick="switchRole('admin')">Home</a>
+          <span class="sep">/</span>
+          <span class="current">Admin Overview</span>
+        </div>
+
         <div
           class="hero-banner"
-          style="background: linear-gradient(135deg, #6c3483 0%, #a569bd 100%)"
+          style="
+            background: linear-gradient(135deg, #6c3483 0%, #a569bd 100%);
+          "
         >
           <h1>Admin Overview</h1>
           <p>
@@ -1316,6 +2445,7 @@
           <div class="stat-card">
             <div class="label">Open Positions</div>
             <div class="value">14</div>
+            <span class="badge badge-blue">Across 8 modules</span>
           </div>
           <div class="stat-card">
             <div class="label">Total Applications</div>
@@ -1329,104 +2459,137 @@
           </div>
         </div>
 
+        <!-- Admin Sub-tabs -->
+        <div class="sub-tabs">
+          <button
+            class="sub-tab active"
+            onclick="switchAdminTab('workload')"
+          >
+            Workload Monitor
+          </button>
+          <button class="sub-tab" onclick="switchAdminTab('recruitment')">
+            Recruitment Summary
+          </button>
+          <button class="sub-tab" onclick="switchAdminTab('logs')">
+            System Logs
+          </button>
+        </div>
+
         <div class="two-col">
           <div>
             <!-- Workload Overview -->
-            <div class="card-section">
-              <div class="section-header">
-                <h2>TA Workload Distribution</h2>
-                <button class="btn btn-outline btn-sm">Export CSV</button>
-              </div>
-              <div style="padding: 24px">
-                <div class="workload-bar-container">
-                  <div class="workload-label">
-                    <span><strong>Zhang Wei</strong> · 3 modules</span
-                    ><span>12 / 20 hrs</span>
-                  </div>
-                  <div class="workload-track">
-                    <div
-                      class="workload-fill"
-                      style="width: 60%; background: var(--success)"
+            <div id="admin-tab-workload">
+              <div class="card-section">
+                <div class="section-header">
+                  <h2>TA Workload Distribution</h2>
+                  <div class="section-header-actions">
+                    <button
+                      class="btn btn-outline btn-sm"
+                      onclick="showToast('CSV exported to workload_export.csv', 'success')"
                     >
-                      12h
-                    </div>
+                      Export CSV
+                    </button>
+                    <button
+                      class="btn btn-sm btn-primary"
+                      onclick="showToast('Workload data refreshed', 'info')"
+                    >
+                      Refresh
+                    </button>
                   </div>
                 </div>
-                <div class="workload-bar-container">
-                  <div class="workload-label">
-                    <span><strong>Li Mei</strong> · 2 modules</span
-                    ><span>8 / 20 hrs</span>
-                  </div>
-                  <div class="workload-track">
-                    <div
-                      class="workload-fill"
-                      style="width: 40%; background: var(--success)"
-                    >
-                      8h
+                <div style="padding: 24px">
+                  <div class="workload-bar-container">
+                    <div class="workload-label">
+                      <span><strong>Zhang Wei</strong> &middot; 3 modules</span>
+                      <span>12 / 20 hrs</span>
+                    </div>
+                    <div class="workload-track">
+                      <div
+                        class="workload-fill"
+                        style="width: 60%; background: var(--success)"
+                      >
+                        12h
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div class="workload-bar-container">
-                  <div class="workload-label">
-                    <span><strong>Wang Hao</strong> · 4 modules</span
-                    ><span>18 / 20 hrs</span>
-                  </div>
-                  <div class="workload-track">
-                    <div
-                      class="workload-fill"
-                      style="width: 90%; background: var(--warn)"
-                    >
-                      18h
+                  <div class="workload-bar-container">
+                    <div class="workload-label">
+                      <span><strong>Li Mei</strong> &middot; 2 modules</span>
+                      <span>8 / 20 hrs</span>
+                    </div>
+                    <div class="workload-track">
+                      <div
+                        class="workload-fill"
+                        style="width: 40%; background: var(--success)"
+                      >
+                        8h
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div class="workload-bar-container">
-                  <div class="workload-label">
-                    <span
-                      ><strong style="color: var(--accent)">Chen Yu</strong> · 5
-                      modules</span
-                    ><span style="color: var(--accent); font-weight: 700"
-                      >24 / 20 hrs ⚠</span
-                    >
-                  </div>
-                  <div class="workload-track" style="position: relative">
-                    <div
-                      class="workload-fill"
-                      style="width: 100%; background: var(--accent)"
-                    >
-                      24h
+                  <div class="workload-bar-container">
+                    <div class="workload-label">
+                      <span><strong>Wang Hao</strong> &middot; 4 modules</span>
+                      <span>18 / 20 hrs</span>
+                    </div>
+                    <div class="workload-track">
+                      <div
+                        class="workload-fill"
+                        style="width: 90%; background: var(--warn)"
+                      >
+                        18h
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div class="workload-bar-container">
-                  <div class="workload-label">
-                    <span
-                      ><strong style="color: var(--accent)">Liu Na</strong> · 4
-                      modules</span
-                    ><span style="color: var(--accent); font-weight: 700"
-                      >22 / 20 hrs ⚠</span
-                    >
-                  </div>
-                  <div class="workload-track">
-                    <div
-                      class="workload-fill"
-                      style="width: 100%; background: var(--accent)"
-                    >
-                      22h
+                  <div class="workload-bar-container">
+                    <div class="workload-label">
+                      <span>
+                        <strong style="color: var(--accent)">Chen Yu</strong>
+                        &middot; 5 modules
+                      </span>
+                      <span style="color: var(--accent); font-weight: 700">
+                        24 / 20 hrs &#9888;
+                      </span>
+                    </div>
+                    <div class="workload-track">
+                      <div
+                        class="workload-fill"
+                        style="width: 100%; background: var(--accent)"
+                      >
+                        24h
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div class="workload-bar-container">
-                  <div class="workload-label">
-                    <span><strong>Zhao Lin</strong> · 1 module</span
-                    ><span>4 / 20 hrs</span>
+                  <div class="workload-bar-container">
+                    <div class="workload-label">
+                      <span>
+                        <strong style="color: var(--accent)">Liu Na</strong>
+                        &middot; 4 modules
+                      </span>
+                      <span style="color: var(--accent); font-weight: 700">
+                        22 / 20 hrs &#9888;
+                      </span>
+                    </div>
+                    <div class="workload-track">
+                      <div
+                        class="workload-fill"
+                        style="width: 100%; background: var(--accent)"
+                      >
+                        22h
+                      </div>
+                    </div>
                   </div>
-                  <div class="workload-track">
-                    <div
-                      class="workload-fill"
-                      style="width: 20%; background: var(--primary)"
-                    >
-                      4h
+                  <div class="workload-bar-container">
+                    <div class="workload-label">
+                      <span><strong>Zhao Lin</strong> &middot; 1 module</span>
+                      <span>4 / 20 hrs</span>
+                    </div>
+                    <div class="workload-track">
+                      <div
+                        class="workload-fill"
+                        style="width: 20%; background: var(--primary)"
+                      >
+                        4h
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1434,68 +2597,289 @@
             </div>
 
             <!-- Recruitment Summary Table -->
-            <div class="card-section">
-              <div class="section-header">
-                <h2>Recruitment Summary by Module</h2>
+            <div id="admin-tab-recruitment" style="display: none">
+              <div class="card-section">
+                <div class="section-header">
+                  <h2>Recruitment Summary by Module</h2>
+                  <button
+                    class="btn btn-outline btn-sm"
+                    onclick="showToast('Report generated: recruitment_summary.txt', 'success')"
+                  >
+                    Generate Report
+                  </button>
+                </div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Module</th>
+                      <th>MO</th>
+                      <th>Applicants</th>
+                      <th>Accepted</th>
+                      <th>Remaining</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>EBU6304</strong></td>
+                      <td>Dr. Smith</td>
+                      <td>8</td>
+                      <td>1</td>
+                      <td>1</td>
+                      <td>
+                        <span class="status-chip status-review"
+                          >In Progress</span
+                        >
+                      </td>
+                    </tr>
+                    <tr>
+                      <td><strong>EBU5476</strong></td>
+                      <td>Prof. Chen</td>
+                      <td>12</td>
+                      <td>3</td>
+                      <td>0</td>
+                      <td>
+                        <span class="status-chip status-accepted">Filled</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td><strong>EBU4201</strong></td>
+                      <td>Dr. Wang</td>
+                      <td>5</td>
+                      <td>0</td>
+                      <td>2</td>
+                      <td>
+                        <span class="status-chip status-submitted">Open</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td><strong>EBU5102</strong></td>
+                      <td>Prof. Liu</td>
+                      <td>6</td>
+                      <td>2</td>
+                      <td>1</td>
+                      <td>
+                        <span class="status-chip status-review"
+                          >In Progress</span
+                        >
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Module</th>
-                    <th>MO</th>
-                    <th>Applicants</th>
-                    <th>Accepted</th>
-                    <th>Remaining</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>EBU6304</strong></td>
-                    <td>Dr. Smith</td>
-                    <td>8</td>
-                    <td>1</td>
-                    <td>1</td>
-                    <td>
-                      <span class="status-chip status-review">In Progress</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td><strong>EBU5476</strong></td>
-                    <td>Prof. Chen</td>
-                    <td>12</td>
-                    <td>3</td>
-                    <td>0</td>
-                    <td>
-                      <span class="status-chip status-accepted">Filled</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td><strong>EBU4201</strong></td>
-                    <td>Dr. Wang</td>
-                    <td>5</td>
-                    <td>0</td>
-                    <td>2</td>
-                    <td>
-                      <span class="status-chip status-submitted">Open</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td><strong>EBU5102</strong></td>
-                    <td>Prof. Liu</td>
-                    <td>6</td>
-                    <td>2</td>
-                    <td>1</td>
-                    <td>
-                      <span class="status-chip status-review">In Progress</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            </div>
+
+            <!-- System Logs -->
+            <div id="admin-tab-logs" style="display: none">
+              <div class="card-section">
+                <div class="section-header">
+                  <h2>System Activity Log</h2>
+                  <div class="section-header-actions">
+                    <select
+                      style="
+                        font-size: 0.78rem;
+                        padding: 5px 10px;
+                        border-radius: var(--radius-sm);
+                        border: 1.5px solid var(--border);
+                      "
+                    >
+                      <option>All Events</option>
+                      <option>Applications</option>
+                      <option>Postings</option>
+                      <option>Errors</option>
+                    </select>
+                    <button
+                      class="btn btn-outline btn-sm"
+                      onclick="showToast('Logs exported to system_log.txt', 'success')"
+                    >
+                      Export Log
+                    </button>
+                  </div>
+                </div>
+                <div class="log-viewer">
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:42:15]</span>
+                    <span class="log-type info">INFO</span>
+                    <span class="log-content"
+                      >User Zhang Wei logged in (role: TA)</span
+                    >
+                  </div>
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:38:02]</span>
+                    <span class="log-type ok">OK</span>
+                    <span class="log-content"
+                      >Application #APP-0142 submitted for EBU5102 &rarr; saved
+                      to applications_data.txt</span
+                    >
+                  </div>
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:35:48]</span>
+                    <span class="log-type info">INFO</span>
+                    <span class="log-content"
+                      >AI matching engine recalculated scores for EBU6304 (8
+                      candidates)</span
+                    >
+                  </div>
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:30:11]</span>
+                    <span class="log-type warn">WARN</span>
+                    <span class="log-content"
+                      >TA Chen Yu workload exceeded 20h limit (current: 24h)
+                      &rarr; flagged in workload_alerts.txt</span
+                    >
+                  </div>
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:28:55]</span>
+                    <span class="log-type ok">OK</span>
+                    <span class="log-content"
+                      >Position EBU4201 published by Dr. Wang &rarr; saved to
+                      positions_data.txt</span
+                    >
+                  </div>
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:25:30]</span>
+                    <span class="log-type warn">WARN</span>
+                    <span class="log-content"
+                      >TA Liu Na workload exceeded 20h limit (current: 22h)
+                      &rarr; flagged in workload_alerts.txt</span
+                    >
+                  </div>
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:20:14]</span>
+                    <span class="log-type info">INFO</span>
+                    <span class="log-content"
+                      >Dr. Smith accepted Zhang Wei for EBU5304 &rarr; updated
+                      recruitment_data.txt</span
+                    >
+                  </div>
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:15:03]</span>
+                    <span class="log-type error">ERROR</span>
+                    <span class="log-content"
+                      >Failed to write to backup_data.txt — disk quota exceeded
+                      (simulated)</span
+                    >
+                  </div>
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:10:22]</span>
+                    <span class="log-type ok">OK</span>
+                    <span class="log-content"
+                      >System backup completed &rarr; backup_20260318.txt
+                      created</span
+                    >
+                  </div>
+                  <div class="log-line">
+                    <span class="log-time">[2026-03-18 09:00:00]</span>
+                    <span class="log-type info">INFO</span>
+                    <span class="log-content"
+                      >System startup — loaded 86 TA profiles, 14 positions, 142
+                      applications from data files</span
+                    >
+                  </div>
+                </div>
+                <!-- File Storage Status -->
+                <div style="padding: 18px 24px">
+                  <div
+                    style="
+                      font-size: 0.82rem;
+                      font-weight: 700;
+                      margin-bottom: 12px;
+                    "
+                  >
+                    File Storage Status (Simulated)
+                  </div>
+                  <div
+                    style="
+                      display: grid;
+                      grid-template-columns: 1fr 1fr;
+                      gap: 10px;
+                    "
+                  >
+                    <div
+                      style="
+                        padding: 10px 14px;
+                        background: var(--success-soft);
+                        border-radius: var(--radius-sm);
+                        font-size: 0.8rem;
+                        display: flex;
+                        justify-content: space-between;
+                      "
+                    >
+                      <span>applications_data.txt</span>
+                      <strong style="color: var(--success)">OK</strong>
+                    </div>
+                    <div
+                      style="
+                        padding: 10px 14px;
+                        background: var(--success-soft);
+                        border-radius: var(--radius-sm);
+                        font-size: 0.8rem;
+                        display: flex;
+                        justify-content: space-between;
+                      "
+                    >
+                      <span>positions_data.txt</span>
+                      <strong style="color: var(--success)">OK</strong>
+                    </div>
+                    <div
+                      style="
+                        padding: 10px 14px;
+                        background: var(--success-soft);
+                        border-radius: var(--radius-sm);
+                        font-size: 0.8rem;
+                        display: flex;
+                        justify-content: space-between;
+                      "
+                    >
+                      <span>recruitment_data.txt</span>
+                      <strong style="color: var(--success)">OK</strong>
+                    </div>
+                    <div
+                      style="
+                        padding: 10px 14px;
+                        background: var(--accent-soft);
+                        border-radius: var(--radius-sm);
+                        font-size: 0.8rem;
+                        display: flex;
+                        justify-content: space-between;
+                      "
+                    >
+                      <span>backup_data.txt</span>
+                      <strong style="color: var(--accent)">ERROR</strong>
+                    </div>
+                    <div
+                      style="
+                        padding: 10px 14px;
+                        background: var(--success-soft);
+                        border-radius: var(--radius-sm);
+                        font-size: 0.8rem;
+                        display: flex;
+                        justify-content: space-between;
+                      "
+                    >
+                      <span>workload_alerts.txt</span>
+                      <strong style="color: var(--success)">OK</strong>
+                    </div>
+                    <div
+                      style="
+                        padding: 10px 14px;
+                        background: var(--success-soft);
+                        border-radius: var(--radius-sm);
+                        font-size: 0.8rem;
+                        display: flex;
+                        justify-content: space-between;
+                      "
+                    >
+                      <span>quota_data.txt</span>
+                      <strong style="color: var(--success)">OK</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- AI Recommendation Sidebar -->
+          <!-- Admin Sidebar -->
           <div>
             <div class="ai-panel">
               <div class="ai-badge">AI Workload Balancer</div>
@@ -1503,13 +2887,17 @@
               <div class="ai-suggestion" style="margin-top: 14px">
                 <strong>Issue Detected:</strong> Chen Yu (24h) and Liu Na (22h)
                 exceed the 20-hour limit.<br /><br />
-                <strong>Suggestion:</strong> Reassign EBU4010 Lab from Chen Yu →
-                Zhao Lin (currently 4h). This reduces Chen Yu to 18h and raises
-                Zhao Lin to 10h.<br /><br />
+                <strong>Suggestion:</strong> Reassign EBU4010 Lab from Chen Yu
+                &rarr; Zhao Lin (currently 4h). This reduces Chen Yu to 18h and
+                raises Zhao Lin to 10h.<br /><br />
                 <strong>Impact:</strong> All TAs within safe workload range.
               </div>
               <div style="display: flex; gap: 8px; margin-top: 16px">
-                <button class="btn btn-accent" style="flex: 1">
+                <button
+                  class="btn btn-accent"
+                  style="flex: 1"
+                  onclick="simulateApplySuggestion()"
+                >
                   Apply Suggestion
                 </button>
                 <button
@@ -1519,6 +2907,7 @@
                     color: #fff;
                     border-color: rgba(255, 255, 255, 0.3);
                   "
+                  onclick="showToast('AI suggestion dismissed', 'warn')"
                 >
                   Dismiss
                 </button>
@@ -1535,12 +2924,13 @@
                   "
                 >
                   <strong>EBU6304 Final Exam</strong><br />
-                  <span style="color: var(--muted); font-size: 0.8rem"
-                    >24 May · 09:00–11:00 · Room A201</span
-                  ><br />
-                  <span style="font-size: 0.8rem"
-                    >Assigned: Zhang Wei, Li Mei</span
-                  >
+                  <span style="color: var(--muted); font-size: 0.8rem">
+                    24 May &middot; 09:00–11:00 &middot; Room A201
+                  </span>
+                  <br />
+                  <span style="font-size: 0.8rem">
+                    Assigned: Zhang Wei, Li Mei
+                  </span>
                 </div>
                 <div
                   style="
@@ -1549,27 +2939,80 @@
                   "
                 >
                   <strong>EBU5476 Midterm</strong><br />
-                  <span style="color: var(--muted); font-size: 0.8rem"
-                    >15 Apr · 14:00–16:00 · Room B305</span
-                  ><br />
-                  <span style="font-size: 0.8rem; color: var(--accent)"
-                    >⚠ 1 TA still needed</span
-                  >
+                  <span style="color: var(--muted); font-size: 0.8rem">
+                    15 Apr &middot; 14:00–16:00 &middot; Room B305
+                  </span>
+                  <br />
+                  <span style="font-size: 0.8rem; color: var(--accent)">
+                    &#9888; 1 TA still needed
+                  </span>
                 </div>
                 <div style="padding: 10px 0">
                   <strong>EBU4201 Quiz</strong><br />
-                  <span style="color: var(--muted); font-size: 0.8rem"
-                    >10 Apr · 10:00–11:00 · Room C102</span
-                  ><br />
+                  <span style="color: var(--muted); font-size: 0.8rem">
+                    10 Apr &middot; 10:00–11:00 &middot; Room C102
+                  </span>
+                  <br />
                   <span style="font-size: 0.8rem">Assigned: Wang Hao</span>
                 </div>
               </div>
               <button
                 class="btn btn-primary"
                 style="width: 100%; margin-top: 16px"
+                onclick="showToast('Opening invigilation management...', 'info')"
               >
                 Manage Invigilation
               </button>
+            </div>
+
+            <!-- Quick Data Overview -->
+            <div class="sidebar-card">
+              <h3>Data Files Overview</h3>
+              <div style="font-size: 0.82rem; margin-top: 8px">
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 8px 0;
+                    border-bottom: 1px solid var(--border);
+                  "
+                >
+                  <span>Total Records</span>
+                  <strong>312</strong>
+                </div>
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 8px 0;
+                    border-bottom: 1px solid var(--border);
+                  "
+                >
+                  <span>Last Backup</span>
+                  <strong>09:10 today</strong>
+                </div>
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 8px 0;
+                    border-bottom: 1px solid var(--border);
+                  "
+                >
+                  <span>Storage Used</span>
+                  <strong>2.4 MB / 10 MB</strong>
+                </div>
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 8px 0;
+                  "
+                >
+                  <span>Active Alerts</span>
+                  <strong style="color: var(--accent)">3</strong>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1577,135 +3020,381 @@
     </div>
 
     <div class="proto-watermark">
-      BUPT TA Recruitment System · Interactive Prototype v1.1 · Group 37
+      BUPT TA Recruitment System &middot; Prototype v2.0 &middot; Group 37
     </div>
 
-    <div class="toast" id="demo-toast" aria-live="polite"></div>
-
+    <!-- ================================================================
+         JAVASCRIPT — Interaction Logic
+         Modular functions with clear responsibilities
+         ================================================================ -->
     <script>
-      const toast = document.getElementById("demo-toast");
-      let toastTimer;
-
-      function showToast(title, detail) {
-        toast.innerHTML = `<strong>${title}</strong><span>${detail}</span>`;
-        toast.classList.add("show");
-        window.clearTimeout(toastTimer);
-        toastTimer = window.setTimeout(() => {
-          toast.classList.remove("show");
-        }, 2400);
-      }
-
+      /* ----------------------------------------
+         Role / Page Switching
+         Updates nav, page visibility, and user avatar
+         ---------------------------------------- */
       function switchRole(role) {
         document
           .querySelectorAll(".page")
-          .forEach((p) => p.classList.remove("active"));
+          .forEach(function (p) { p.classList.remove("active"); });
         document.getElementById("page-" + role).classList.add("active");
-        document.querySelectorAll(".topbar nav button").forEach((b, i) => {
+
+        var buttons = document.querySelectorAll("#mainNav button");
+        buttons.forEach(function (b, i) {
           b.classList.toggle(
             "active",
             (role === "ta" && i === 0) ||
               (role === "mo" && i === 1) ||
-              (role === "admin" && i === 2),
+              (role === "admin" && i === 2)
           );
         });
-        // Update user pill based on role
-        const pill = document.querySelector(".user-pill");
-        const avatars = {
+
+        var pill = document.querySelector(".user-pill");
+        var avatars = {
           ta: ["ZW", "Zhang Wei"],
           mo: ["JS", "Dr. J. Smith"],
-          admin: ["AD", "Admin"],
+          admin: ["AD", "Admin"]
         };
         pill.querySelector(".avatar").textContent = avatars[role][0];
         pill.querySelector("span").textContent = avatars[role][1];
+      }
+
+      /* ----------------------------------------
+         Sub-tab Switching (TA page)
+         ---------------------------------------- */
+      function switchTATab(tab) {
+        document.getElementById("ta-tab-positions").style.display =
+          tab === "positions" ? "block" : "none";
+        document.getElementById("ta-tab-applications").style.display =
+          tab === "applications" ? "block" : "none";
+
+        var tabs = document.querySelectorAll(
+          "#page-ta .sub-tabs .sub-tab"
+        );
+        tabs.forEach(function (t, i) {
+          t.classList.toggle(
+            "active",
+            (tab === "positions" && i === 0) ||
+              (tab === "applications" && i === 1)
+          );
+        });
+      }
+
+      /* ----------------------------------------
+         Sub-tab Switching (MO page)
+         ---------------------------------------- */
+      function switchMOTab(tab) {
+        document.getElementById("mo-tab-postings").style.display =
+          tab === "postings" ? "block" : "none";
+        document.getElementById("mo-tab-applicants").style.display =
+          tab === "applicants" ? "block" : "none";
+        document.getElementById("mo-tab-quotas").style.display =
+          tab === "quotas" ? "block" : "none";
+
+        var tabs = document.querySelectorAll(
+          "#page-mo .sub-tabs .sub-tab"
+        );
+        tabs.forEach(function (t, i) {
+          t.classList.toggle(
+            "active",
+            (tab === "postings" && i === 0) ||
+              (tab === "applicants" && i === 1) ||
+              (tab === "quotas" && i === 2)
+          );
+        });
+      }
+
+      /* ----------------------------------------
+         Sub-tab Switching (Admin page)
+         ---------------------------------------- */
+      function switchAdminTab(tab) {
+        document.getElementById("admin-tab-workload").style.display =
+          tab === "workload" ? "block" : "none";
+        document.getElementById("admin-tab-recruitment").style.display =
+          tab === "recruitment" ? "block" : "none";
+        document.getElementById("admin-tab-logs").style.display =
+          tab === "logs" ? "block" : "none";
+
+        var tabs = document.querySelectorAll(
+          "#page-admin .sub-tabs .sub-tab"
+        );
+        tabs.forEach(function (t, i) {
+          t.classList.toggle(
+            "active",
+            (tab === "workload" && i === 0) ||
+              (tab === "recruitment" && i === 1) ||
+              (tab === "logs" && i === 2)
+          );
+        });
+      }
+
+      /* ----------------------------------------
+         Toast Notification System
+         Types: success (default), error, warn, info
+         Auto-dismisses after 3 seconds
+         ---------------------------------------- */
+      function showToast(message, type) {
+        type = type || "success";
+        var container = document.getElementById("toastContainer");
+        var icons = {
+          success: "\u2705",
+          error: "\u274C",
+          warn: "\u26A0\uFE0F",
+          info: "\u2139\uFE0F"
+        };
+
+        var toast = document.createElement("div");
+        toast.className = "toast toast-" + type;
+        toast.innerHTML =
+          '<span class="toast-icon">' +
+          icons[type] +
+          "</span>" +
+          '<span class="toast-msg">' +
+          message +
+          "</span>" +
+          '<button class="toast-close" onclick="this.parentElement.remove()">&times;</button>';
+
+        container.appendChild(toast);
+        setTimeout(function () {
+          if (toast.parentElement) toast.remove();
+        }, 3200);
+      }
+
+      /* ----------------------------------------
+         Modal System
+         Generic open/close for detail popups
+         ---------------------------------------- */
+      function openModal(title, bodyHTML) {
+        document.getElementById("modalTitle").textContent = title;
+        document.getElementById("modalBody").innerHTML = bodyHTML;
+        document.getElementById("modalOverlay").classList.add("show");
+      }
+
+      function closeModal(event) {
+        if (event && event.target !== event.currentTarget) return;
+        document.getElementById("modalOverlay").classList.remove("show");
+      }
+
+      /* ----------------------------------------
+         TA: Application Detail Modal
+         Shows detailed info when "View Detail" is clicked
+         ---------------------------------------- */
+      function openAppDetail(code, status) {
+        var statusLabels = {
+          accepted: '<span class="status-chip status-accepted">Accepted</span>',
+          review: '<span class="status-chip status-review">Under Review</span>',
+          submitted: '<span class="status-chip status-submitted">Submitted</span>',
+          rejected: '<span class="status-chip status-rejected">Rejected</span>'
+        };
+
+        var html =
+          "<div>" +
+          '<div style="margin-bottom:16px">' +
+          "<strong>Module:</strong> " + code + "<br>" +
+          "<strong>Status:</strong> " + statusLabels[status] + "<br>" +
+          '<strong>Applied:</strong> March 2026<br>' +
+          '<strong>Skills Submitted:</strong> Java, Python, Git, SQL' +
+          "</div>" +
+          '<div style="padding:14px;background:var(--primary-soft);border-radius:var(--radius-sm);margin-bottom:14px">' +
+          '<div style="font-size:0.78rem;font-weight:700;margin-bottom:6px">' +
+          "\u2726 AI Match Analysis" +
+          "</div>" +
+          '<div style="font-size:0.84rem">' +
+          "Skill overlap score: <strong>85%</strong><br>" +
+          "GPA relevance: <strong>High</strong><br>" +
+          "Workload compatibility: <strong>Good</strong>" +
+          "</div>" +
+          "</div>" +
+          '<div style="font-size:0.82rem;color:var(--muted)">' +
+          "Data stored in: applications_data.txt" +
+          "</div>" +
+          "</div>";
+
+        openModal("Application Detail — " + code, html);
+      }
+
+      /* ----------------------------------------
+         TA: Edit Profile Modal
+         ---------------------------------------- */
+      function openEditProfileModal() {
+        var html =
+          '<div class="form-group" style="margin-bottom:14px">' +
+          "<label>Full Name</label>" +
+          '<input type="text" value="Zhang Wei" style="width:100%;font-family:var(--font-body);padding:10px 14px;border:1.5px solid var(--border);border-radius:8px">' +
+          "</div>" +
+          '<div class="form-group" style="margin-bottom:14px">' +
+          "<label>Email</label>" +
+          '<input type="email" value="zhangwei@bupt.edu.cn" style="width:100%;font-family:var(--font-body);padding:10px 14px;border:1.5px solid var(--border);border-radius:8px">' +
+          "</div>" +
+          '<div class="form-group" style="margin-bottom:14px">' +
+          "<label>Year of Study</label>" +
+          '<select style="width:100%;font-family:var(--font-body);padding:10px 14px;border:1.5px solid var(--border);border-radius:8px">' +
+          "<option>Year 1</option><option>Year 2</option><option selected>Year 3</option><option>Year 4</option>" +
+          "</select>" +
+          "</div>" +
+          '<div class="form-group" style="margin-bottom:14px">' +
+          "<label>GPA</label>" +
+          '<input type="text" value="3.7" style="width:100%;font-family:var(--font-body);padding:10px 14px;border:1.5px solid var(--border);border-radius:8px">' +
+          "</div>" +
+          '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">' +
+          '<button class="btn btn-outline" onclick="closeModal()">Cancel</button>' +
+          '<button class="btn btn-primary" onclick="simulateSaveProfile()">Save Profile</button>' +
+          "</div>";
+        openModal("Edit Profile", html);
+      }
+
+      /* ----------------------------------------
+         TA: Skill Tag Management
+         Add and remove skill tags interactively
+         ---------------------------------------- */
+      function removeSkill(el) {
+        var skillName = el.textContent.replace("\u00d7", "").trim();
+        el.remove();
+        showToast('Skill "' + skillName + '" removed', "warn");
+        simulateFileSave("profile_data.txt");
+      }
+
+      function addSkillPrompt() {
+        var skill = prompt("Enter a new skill:");
+        if (skill && skill.trim()) {
+          var container = document.getElementById("skillTagContainer");
+          var addBtn = container.querySelector(".skill-tag-add");
+          var tag = document.createElement("span");
+          tag.className = "skill-tag removable";
+          tag.onclick = function () { removeSkill(tag); };
+          tag.innerHTML =
+            skill.trim() + ' <span class="remove-x">&times;</span>';
+          container.insertBefore(tag, addBtn);
+          showToast('Skill "' + skill.trim() + '" added', "success");
+          simulateFileSave("profile_data.txt");
+        }
+      }
+
+      /* ----------------------------------------
+         TA: Simulate applying to a position
+         ---------------------------------------- */
+      function simulateApply(code) {
         showToast(
-          "Role switched",
-          `Now viewing the ${role.toUpperCase()} workflow for the prototype demo.`,
+          "Application submitted for " + code + "! Saved to applications_data.txt",
+          "success"
         );
       }
 
-      document.querySelectorAll("button").forEach((button) => {
-        button.addEventListener("click", () => {
-          const label = button.textContent.trim();
-          const row = button.closest("tr");
-          const moduleCell = row
-            ? row.querySelector("td strong")
-            : null;
-          const moduleName = moduleCell ? moduleCell.textContent.trim() : "this item";
+      /* ----------------------------------------
+         TA: Simulate CV upload
+         ---------------------------------------- */
+      function simulateUploadCV() {
+        showToast("CV uploaded successfully! Saved to cv_uploads/", "success");
+      }
 
-          if (label === "Apply") {
-            button.textContent = "Applied";
-            button.disabled = true;
-            showToast("Application submitted", `${moduleName} has been added to your draft application list.`);
-            return;
-          }
+      /* ----------------------------------------
+         TA: Simulate profile save
+         ---------------------------------------- */
+      function simulateSaveProfile() {
+        closeModal();
+        showToast("Profile updated! Saved to profile_data.txt", "success");
+      }
 
-          if (label === "View") {
-            showToast("Application details", `Opened the latest status summary for ${moduleName}.`);
-            return;
-          }
+      /* ----------------------------------------
+         MO: Simulate publish position
+         Shows file-save feedback bar then toast
+         ---------------------------------------- */
+      function simulatePublish() {
+        var bar = document.getElementById("moFileSaveBar");
+        bar.classList.add("active");
+        setTimeout(function () {
+          bar.classList.remove("active");
+          showToast(
+            "Position published successfully! Saved to positions_data.txt",
+            "success"
+          );
+        }, 1500);
+      }
 
-          if (label === "Edit Profile") {
-            showToast("Profile editor", "Profile editing flow highlighted for the TA journey.");
-            return;
-          }
+      /* ----------------------------------------
+         MO: Simulate save draft
+         ---------------------------------------- */
+      function simulateSaveDraft() {
+        var bar = document.getElementById("moFileSaveBar");
+        bar.querySelector("span").textContent =
+          "Saving draft to drafts_data.txt ...";
+        bar.classList.add("active");
+        setTimeout(function () {
+          bar.classList.remove("active");
+          bar.querySelector("span").textContent =
+            "Saving to positions_data.txt ...";
+          showToast("Draft saved to drafts_data.txt", "info");
+        }, 1200);
+      }
 
-          if (label === "Upload CV") {
-            showToast("CV upload", "Prototype confirms CV upload before final submission.");
-            return;
-          }
+      /* ----------------------------------------
+         MO: Accept / Reject applicant
+         ---------------------------------------- */
+      function simulateAccept(name) {
+        showToast(
+          name + " has been accepted! Updated in recruitment_data.txt",
+          "success"
+        );
+      }
 
-          if (label === "Save as Draft") {
-            showToast("Draft saved", "The new TA position has been kept as a draft for review.");
-            return;
-          }
+      function simulateReject(name) {
+        showToast(
+          name + " has been rejected. Updated in recruitment_data.txt",
+          "error"
+        );
+      }
 
-          if (label === "Publish Position") {
-            showToast("Position published", "The vacancy is now visible to eligible TA applicants.");
-            return;
-          }
+      /* ----------------------------------------
+         MO: Quota adjustment
+         ---------------------------------------- */
+      function adjustQuota(btn, delta) {
+        var quotaItem = btn.closest(".quota-item");
+        var numEl = quotaItem.querySelector(".quota-number");
+        var parts = numEl.textContent.trim().split(" / ");
+        var total = parseInt(parts[1]) + delta;
+        if (total < parseInt(parts[0])) total = parseInt(parts[0]);
+        if (total > 10) total = 10;
+        numEl.textContent = parts[0] + " / " + total;
+        showToast("Quota updated to " + total + " slots", "info");
+      }
 
-          if (label === "Accept" || label === "Reject") {
-            const statusChip = row ? row.querySelector(".status-chip") : null;
-            const acceptButton = row ? row.querySelector(".btn-accept") : null;
-            const rejectButton = row ? row.querySelector(".btn-reject") : null;
+      /* ----------------------------------------
+         MO: Save quota changes
+         ---------------------------------------- */
+      function simulateSaveQuotas() {
+        var bar = document.getElementById("quotaFileSaveBar");
+        bar.classList.add("active");
+        setTimeout(function () {
+          bar.classList.remove("active");
+          showToast("Quota changes saved to quota_data.txt", "success");
+        }, 1200);
+      }
 
-            if (statusChip) {
-              statusChip.className = `status-chip ${label === "Accept" ? "status-accepted" : "status-rejected"}`;
-              statusChip.textContent = label === "Accept" ? "Accepted" : "Rejected";
-            }
-            if (acceptButton) {
-              acceptButton.disabled = true;
-            }
-            if (rejectButton) {
-              rejectButton.disabled = true;
-            }
+      /* ----------------------------------------
+         Admin: Apply AI rebalancing suggestion
+         ---------------------------------------- */
+      function simulateApplySuggestion() {
+        showToast(
+          "AI rebalancing applied! Chen Yu: 24h \u2192 18h, Zhao Lin: 4h \u2192 10h. Saved to workload_data.txt",
+          "success"
+        );
+      }
 
-            showToast(
-              `Applicant ${label.toLowerCase()}ed`,
-              `${moduleName} candidate status updated for the MO review workflow.`,
-            );
-            return;
-          }
+      /* ----------------------------------------
+         Generic: Simulate file save feedback
+         Brief toast indicating file write
+         ---------------------------------------- */
+      function simulateFileSave(filename) {
+        setTimeout(function () {
+          showToast("Data synced to " + filename, "info");
+        }, 500);
+      }
 
-          if (label === "Export CSV") {
-            showToast("Export prepared", "Workload data is ready for CSV export in the admin workflow.");
-            return;
-          }
-
-          if (label === "Apply Suggestion") {
-            showToast("Recommendation applied", "AI workload balancing has been accepted for review.");
-            return;
-          }
-
-          if (label === "Dismiss") {
-            showToast("Recommendation dismissed", "The admin chose to keep the current workload allocation.");
-            return;
-          }
-
-          if (label === "Manage Invigilation") {
-            showToast("Invigilation planner", "Opened the scheduling flow for exam support assignments.");
-          }
-        });
+      /* ----------------------------------------
+         Keyboard shortcut: Escape closes modal
+         (Nielsen: User control & freedom)
+         ---------------------------------------- */
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") closeModal();
       });
     </script>
   </body>
