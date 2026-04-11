@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Position.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Smart-TA Unit Tests</a> &gt; <a href="index.source.html" class="el_package">com.bupt.smartta.model</a> &gt; <span class="el_source">Position.java</span></div><h1>Position.java</h1><pre class="source lang-java linenums">package com.bupt.smartta.model;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Position implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private String code;
+    private String name;
+    private List&lt;String&gt; requiredSkills;
+    private int hoursPerWeek;
+    private int totalSlots;
+    private int filledSlots;
+    private String deadline;
+    private String description;
+    private String postedBy;
+    /** 发布该职位的 MO 登录名（由系统写入，用于 TA 精确关联负责老师） */
+    private String postedByUsername;
+    private String postedAt;
+    private String status;
+
+<span class="fc" id="L24">    public Position() {</span>
+<span class="fc" id="L25">        this.requiredSkills = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L26">        this.status = &quot;Open&quot;;</span>
+<span class="fc" id="L27">        this.filledSlots = 0;</span>
+<span class="fc" id="L28">    }</span>
+
+    public Position(String code, String name, List&lt;String&gt; requiredSkills,
+<span class="fc" id="L31">                   int hoursPerWeek, int totalSlots, String deadline, String postedBy) {</span>
+<span class="fc" id="L32">        this.code = code;</span>
+<span class="fc" id="L33">        this.name = name;</span>
+<span class="fc bfc" id="L34" title="All 2 branches covered.">        this.requiredSkills = requiredSkills != null ? requiredSkills : new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L35">        this.hoursPerWeek = hoursPerWeek;</span>
+<span class="fc" id="L36">        this.totalSlots = totalSlots;</span>
+<span class="fc" id="L37">        this.deadline = deadline;</span>
+<span class="fc" id="L38">        this.postedBy = postedBy;</span>
+<span class="fc" id="L39">        this.postedAt = java.time.LocalDate.now().toString();</span>
+<span class="fc" id="L40">        this.status = &quot;Open&quot;;</span>
+<span class="fc" id="L41">        this.filledSlots = 0;</span>
+<span class="fc" id="L42">    }</span>
+
+<span class="fc" id="L44">    public String getCode() { return code; }</span>
+<span class="fc" id="L45">    public void setCode(String code) { this.code = code; }</span>
+<span class="fc" id="L46">    public String getName() { return name; }</span>
+<span class="fc" id="L47">    public void setName(String name) { this.name = name; }</span>
+<span class="fc" id="L48">    public List&lt;String&gt; getRequiredSkills() { return requiredSkills; }</span>
+<span class="fc" id="L49">    public void setRequiredSkills(List&lt;String&gt; requiredSkills) { this.requiredSkills = requiredSkills; }</span>
+<span class="fc" id="L50">    public int getHoursPerWeek() { return hoursPerWeek; }</span>
+<span class="fc" id="L51">    public void setHoursPerWeek(int hoursPerWeek) { this.hoursPerWeek = hoursPerWeek; }</span>
+<span class="fc" id="L52">    public int getTotalSlots() { return totalSlots; }</span>
+<span class="fc" id="L53">    public void setTotalSlots(int totalSlots) { this.totalSlots = totalSlots; }</span>
+<span class="fc" id="L54">    public int getFilledSlots() { return filledSlots; }</span>
+<span class="fc" id="L55">    public void setFilledSlots(int filledSlots) { this.filledSlots = filledSlots; }</span>
+<span class="fc" id="L56">    public String getDeadline() { return deadline; }</span>
+<span class="fc" id="L57">    public void setDeadline(String deadline) { this.deadline = deadline; }</span>
+<span class="fc" id="L58">    public String getDescription() { return description; }</span>
+<span class="fc" id="L59">    public void setDescription(String description) { this.description = description; }</span>
+<span class="fc" id="L60">    public String getPostedBy() { return postedBy; }</span>
+<span class="fc" id="L61">    public void setPostedBy(String postedBy) { this.postedBy = postedBy; }</span>
+<span class="fc" id="L62">    public String getPostedByUsername() { return postedByUsername; }</span>
+<span class="fc" id="L63">    public void setPostedByUsername(String postedByUsername) { this.postedByUsername = postedByUsername; }</span>
+<span class="fc" id="L64">    public String getPostedAt() { return postedAt; }</span>
+<span class="fc" id="L65">    public void setPostedAt(String postedAt) { this.postedAt = postedAt; }</span>
+<span class="fc" id="L66">    public String getStatus() { return status; }</span>
+<span class="fc" id="L67">    public void setStatus(String status) { this.status = status; }</span>
+
+    public int getRemainingSlots() {
+<span class="fc" id="L70">        return Math.max(0, totalSlots - filledSlots);</span>
+    }
+
+    public boolean isOpen() {
+<span class="fc bfc" id="L74" title="All 4 branches covered.">        return &quot;Open&quot;.equals(status) &amp;&amp; getRemainingSlots() &gt; 0;</span>
+    }
+
+    public String getRequiredSkillsStr() {
+<span class="fc" id="L78">        return String.join(&quot;, &quot;, requiredSkills);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

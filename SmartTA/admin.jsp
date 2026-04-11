@@ -5,7 +5,10 @@
         response.sendRedirect("index.jsp");
         return;
     }
-    if (!"ADMIN".equals(adminCurrentRole)) {
+    @SuppressWarnings("unchecked")
+    java.util.Set<String> adminSessionRoles = (java.util.Set<String>) session.getAttribute("roles");
+    boolean adminByAccount = adminSessionRoles != null && adminSessionRoles.contains("ADMIN");
+    if (!adminByAccount && !"ADMIN".equals(adminCurrentRole)) {
         if ("TA".equals(adminCurrentRole)) {
             response.sendRedirect("ta.jsp");
         } else if ("MO".equals(adminCurrentRole)) {
@@ -22,6 +25,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Admin · Smart-TA</title>
+<link rel="icon" href="<%= request.getContextPath() %>/favicon.ico" type="image/x-icon" />
+<link rel="icon" href="<%= request.getContextPath() %>/favicon.svg" type="image/svg+xml" />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="css/smartta-shell.css" />
 <style>
@@ -351,6 +356,17 @@ tr:last-child td { border-bottom:none; }
 
 <div id="toastContainer"></div>
 
+<div id="appConfirmOverlay" class="modal-overlay" onclick="if(event.target===this)appConfirmFinish(false)" style="z-index:6000;">
+    <div class="modal-box" onclick="event.stopPropagation()" style="max-width:420px;">
+        <h3 id="appConfirmTitle">Confirm</h3>
+        <p id="appConfirmMessage" style="font-size:0.9rem;line-height:1.55;color:var(--ink);margin:0 0 18px;"></p>
+        <div class="modal-footer" style="justify-content:flex-end;gap:8px;margin-top:0;">
+            <button type="button" class="btn btn-outline" style="color:var(--ink);border-color:var(--border)" id="appConfirmCancel">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" id="appConfirmOk">OK</button>
+        </div>
+    </div>
+</div>
+
 <div id="adminModalOverlay" class="modal-overlay" onclick="if(event.target===this)closeAdminModal()">
     <div class="modal-box" onclick="event.stopPropagation()">
         <h3 id="adminModalTitle">User</h3>
@@ -360,6 +376,26 @@ tr:last-child td { border-bottom:none; }
 </div>
 
 <script>
+var __appConfirmResolver = null;
+function showAppConfirm(message, title) {
+    title = title || "Please confirm";
+    return new Promise(function(resolve) {
+        __appConfirmResolver = resolve;
+        document.getElementById("appConfirmTitle").textContent = title;
+        document.getElementById("appConfirmMessage").textContent = message;
+        document.getElementById("appConfirmOverlay").classList.add("show");
+        document.getElementById("appConfirmOk").onclick = function() { appConfirmFinish(true); };
+        document.getElementById("appConfirmCancel").onclick = function() { appConfirmFinish(false); };
+    });
+}
+function appConfirmFinish(result) {
+    document.getElementById("appConfirmOverlay").classList.remove("show");
+    if (__appConfirmResolver) {
+        __appConfirmResolver(result);
+        __appConfirmResolver = null;
+    }
+}
+
 let adminSession = {};
 let adminCsrfToken = null;
 
@@ -589,13 +625,20 @@ function showUserProfileModal(username) {
     body += "<p style=\"font-size:0.85rem;margin-bottom:10px\"><strong>Applicant ID:</strong> " + escHtml(u.applicantId || "(none)") + "</p>";
     if (u.applicantProfile) {
         let p = u.applicantProfile;
+        let isTaRole = (u.roles || []).indexOf("TA") >= 0;
         body += "<hr style=\"border:none;border-top:1px solid var(--border);margin:14px 0\"/>";
         body += "<p style=\"font-weight:700;font-size:0.88rem;margin-bottom:8px\">TA applicant record</p>";
         body += "<p style=\"font-size:0.82rem;color:var(--muted)\">" + escHtml(p.yearOfStudy || "") + " · GPA " + p.gpa + " · " + (p.hoursAvailable != null ? p.hoursAvailable + "h avail" : "") + "</p>";
         body += "<p style=\"font-size:0.82rem;margin-top:6px\">Skills: " + escHtml((p.skills || []).join(", ")) + "</p>";
         if (p.createdAt) body += "<p style=\"font-size:0.75rem;color:var(--muted);margin-top:8px\">Record created: " + escHtml(p.createdAt) + "</p>";
-        body += "<div style=\"margin-top:12px\">" +
-            "<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"closeAdminModal();openApplicantEditModal('" + escAttr(p.id) + "')\">Edit applicant profile</button></div>";
+        if (isTaRole) {
+            body += "<div style=\"margin-top:12px\">" +
+                "<a class=\"btn btn-primary btn-sm\" target=\"_blank\" rel=\"noopener\" href=\"download?applicantId=" + encodeURIComponent(p.id) + "\">Download applicant's CV</a></div>";
+        } else {
+            if (p.cvFileName) body += "<p style=\"margin-top:10px\"><a class=\"btn btn-primary btn-sm\" target=\"_blank\" rel=\"noopener\" href=\"download?applicantId=" + encodeURIComponent(p.id) + "\">Download TA CV</a></p>";
+            body += "<div style=\"margin-top:12px\">" +
+                "<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"closeAdminModal();openApplicantEditModal('" + escAttr(p.id) + "')\">Edit applicant profile</button></div>";
+        }
     } else if ((u.roles || []).indexOf("TA") >= 0) {
         body += "<p style=\"font-size:0.78rem;color:var(--muted);margin-top:10px\">No linked applicant profile. Set Applicant ID when editing the user.</p>";
     }
@@ -621,6 +664,9 @@ function openUserModal(username) {
     form += "<label>Email</label><input id=\"admUserEmail\" type=\"email\" value=\"" + (u ? escHtml(u.email || "") : "") + "\"/>";
     form += "<label>Roles (comma: TA, MO, ADMIN)</label><input id=\"admUserRoles\" type=\"text\" value=\"" + escHtml(rolesVal) + "\"/>";
     form += "<label>Linked applicant ID (TA profile, e.g. A001)</label><input id=\"admUserApplicantId\" type=\"text\" value=\"" + (u && u.applicantId ? escHtml(u.applicantId) : "") + "\" placeholder=\"Optional\"/>";
+    if (u && u.applicantId && u.applicantProfile && u.applicantProfile.cvFileName) {
+        form += "<div style=\"margin-top:14px\"><a class=\"btn btn-primary btn-sm\" target=\"_blank\" rel=\"noopener\" href=\"download?applicantId=" + encodeURIComponent(u.applicantId) + "\">Download TA CV</a></div>";
+    }
     document.getElementById("adminModalBody").innerHTML = form;
     let saveLabel = u ? "Save changes" : "Create user";
     document.getElementById("adminModalFooter").innerHTML =
@@ -666,7 +712,7 @@ async function submitUserForm(isUpdate) {
 }
 
 async function deleteUserConfirm(username) {
-    if (!confirm("Delete user \"" + username + "\"? This cannot be undone.")) return;
+    if (!(await showAppConfirm("Delete user \"" + username + "\"? This cannot be undone.", "Delete user"))) return;
     let p = new URLSearchParams();
     p.append("_csrf", adminCsrfToken || sessionStorage.getItem("csrfToken") || "");
     p.append("op", "delete");
@@ -745,7 +791,7 @@ async function submitApplicantForm(applicantId) {
 }
 
 async function deleteApplicantConfirm(applicantId) {
-    if (!confirm("Delete applicant " + applicantId + " and all their applications?")) return;
+    if (!(await showAppConfirm("Delete applicant " + applicantId + " and all their applications?", "Delete applicant"))) return;
     let p = new URLSearchParams();
     p.append("_csrf", adminCsrfToken || sessionStorage.getItem("csrfToken") || "");
     p.append("op", "delete");
@@ -773,7 +819,7 @@ async function deleteApplicantConfirm(applicantId) {
 async function loadWorkload() {
     try {
         // 优先使用 workloadEntries 端点（返回完整结构化数据）
-        let res = await fetch("api/workloads");
+        let res = await fetch("api/workloadEntries");
         let json = await res.json();
         let entries = json.workloadEntries;
         if (!entries || !entries.length) {
@@ -856,8 +902,8 @@ function renderAiSuggestion(entries) {
             return u + " (" + e.hours + "h)";
         }).join(", ");
         container.innerHTML = `<strong>Issue detected:</strong> ${names} exceed the ${CAPACITY}-hour limit.<br/><br/>
-            <strong>Suggestion:</strong> Reassign one module from the overloaded TA to another with lower workload.<br/><br/>
-            <strong>Impact:</strong> All TAs within safe range after reassignment.`;
+            <strong>DeepSeek AI analysis:</strong> Clicking "Apply Suggestion" will invoke the DeepSeek API to generate a precise rebalancing plan for the overloaded TA(s).<br/><br/>
+            <strong>Fallback:</strong> If AI is unavailable, a fixed rule is used (reduce by 4h).`;
     }
 }
 
@@ -907,8 +953,8 @@ function renderLogs(logs) {
     }).join("");
 }
 
-function applySuggestion() {
-    if (!confirm("Are you sure you want to apply the AI workload rebalancing suggestion?")) return;
+async function applySuggestion() {
+    if (!(await showAppConfirm("Are you sure you want to apply the AI workload rebalancing suggestion?", "Apply suggestion"))) return;
     let btn = document.querySelector(".ai-panel .btn-success");
     if (btn) btn.disabled = true;
     let p = new URLSearchParams();
@@ -921,8 +967,18 @@ function applySuggestion() {
     })
         .then(r => r.json())
         .then(json => {
-            if (json.success) showToast(json.message || "Workload rebalanced successfully!", "success");
-            else showToast(json.message || "Rebalance failed", "error");
+            if (json.success) {
+                let msg = json.message || "Workload rebalanced successfully!";
+                if (json.ai) {
+                    // DeepSeek AI 返回的建议
+                    showToast("AI: " + msg, "success");
+                } else {
+                    showToast("Rebalanced (fallback): " + msg, "info");
+                }
+                loadWorkload();
+            } else {
+                showToast(json.message || "Rebalance failed", "error");
+            }
         })
         .catch(e => showToast("Error: " + e.message, "error"))
         .finally(() => {

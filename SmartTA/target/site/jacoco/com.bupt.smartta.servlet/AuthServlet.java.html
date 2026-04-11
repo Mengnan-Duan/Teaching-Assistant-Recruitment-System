@@ -1,0 +1,456 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AuthServlet.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Smart-TA Unit Tests</a> &gt; <a href="index.source.html" class="el_package">com.bupt.smartta.servlet</a> &gt; <span class="el_source">AuthServlet.java</span></div><h1>AuthServlet.java</h1><pre class="source lang-java linenums">package com.bupt.smartta.servlet;
+
+import com.bupt.smartta.model.TAPplicant;
+import com.bupt.smartta.model.User;
+import com.bupt.smartta.model.SystemLog;
+import com.bupt.smartta.util.DataStore;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+import java.io.IOException;
+import java.util.*;
+import java.util.regex.Pattern;
+
+<span class="nc" id="L16">public class AuthServlet extends HttpServlet {</span>
+
+<span class="nc" id="L18">    private final DataStore ds = DataStore.getInstance();</span>
+
+    private static final String CSRF_PARAM = &quot;_csrf&quot;;
+    private static final String CSRF_SESSION_ATTR = &quot;csrfToken&quot;;
+
+    /** 至少 8 位，且同时包含字母与数字。 */
+<span class="nc" id="L24">    private static final Pattern PASSWORD_PATTERN =</span>
+<span class="nc" id="L25">            Pattern.compile(&quot;^(?=.*[A-Za-z])(?=.*\\d).{8,}$&quot;);</span>
+
+    /**
+     * 统一的 HTML 转义方法（防止 XSS）。
+     * 在所有向 HTML 嵌入用户数据处使用此方法。
+     */
+    private String escHtml(String s) {
+<span class="nc bnc" id="L32" title="All 2 branches missed.">        if (s == null) return &quot;&quot;;</span>
+<span class="nc" id="L33">        return s.replace(&quot;&amp;&quot;, &quot;&amp;amp;&quot;)</span>
+<span class="nc" id="L34">                .replace(&quot;&lt;&quot;, &quot;&amp;lt;&quot;)</span>
+<span class="nc" id="L35">                .replace(&quot;&gt;&quot;, &quot;&amp;gt;&quot;)</span>
+<span class="nc" id="L36">                .replace(&quot;\&quot;&quot;, &quot;&amp;quot;&quot;)</span>
+<span class="nc" id="L37">                .replace(&quot;'&quot;, &quot;&amp;#x27;&quot;)</span>
+<span class="nc" id="L38">                .replace(&quot;/&quot;, &quot;&amp;#x2F;&quot;)</span>
+<span class="nc" id="L39">                .replace(&quot;\\&quot;, &quot;\\\\&quot;)</span>
+<span class="nc" id="L40">                .replace(&quot;\n&quot;, &quot;\\n&quot;)</span>
+<span class="nc" id="L41">                .replace(&quot;\r&quot;, &quot;\\r&quot;)</span>
+<span class="nc" id="L42">                .replace(&quot;\t&quot;, &quot;\\t&quot;);</span>
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+<span class="nc" id="L48">        req.setCharacterEncoding(&quot;UTF-8&quot;);</span>
+<span class="nc" id="L49">        resp.setContentType(&quot;application/json&quot;);</span>
+<span class="nc" id="L50">        resp.setCharacterEncoding(&quot;UTF-8&quot;);</span>
+        try {
+<span class="nc" id="L52">            String path = req.getPathInfo();</span>
+
+<span class="nc bnc" id="L54" title="All 4 branches missed.">            if (path == null || path.equals(&quot;/&quot;)) {</span>
+<span class="nc" id="L55">                sendError(resp, &quot;Missing action&quot;);</span>
+<span class="nc" id="L56">                return;</span>
+            }
+<span class="nc" id="L58">            String action = path.substring(1);</span>
+
+<span class="nc bnc" id="L60" title="All 5 branches missed.">            switch (action) {</span>
+<span class="nc" id="L61">                case &quot;login&quot;:    handleLogin(req, resp);    break;</span>
+<span class="nc" id="L62">                case &quot;register&quot;: handleRegister(req, resp); break;</span>
+<span class="nc" id="L63">                case &quot;logout&quot;:   handleLogout(req, resp);   break;</span>
+<span class="nc" id="L64">                case &quot;switchRole&quot;: handleSwitchRole(req, resp); break;</span>
+<span class="nc" id="L65">                default: sendError(resp, &quot;Unknown action: &quot; + action);</span>
+            }
+<span class="nc" id="L67">        } catch (Exception e) {</span>
+<span class="nc" id="L68">            e.printStackTrace();</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">            if (!resp.isCommitted()) {</span>
+<span class="nc" id="L70">                resp.resetBuffer();</span>
+<span class="nc" id="L71">                resp.setContentType(&quot;application/json;charset=UTF-8&quot;);</span>
+<span class="nc" id="L72">                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);</span>
+<span class="nc" id="L73">                resp.getWriter().write(&quot;{\&quot;success\&quot;:false,\&quot;error\&quot;:\&quot;&quot; + escJson(e.getMessage()) + &quot;\&quot;}&quot;);</span>
+            }
+<span class="nc" id="L75">        }</span>
+<span class="nc" id="L76">    }</span>
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+<span class="nc" id="L81">        req.setCharacterEncoding(&quot;UTF-8&quot;);</span>
+<span class="nc" id="L82">        resp.setContentType(&quot;application/json&quot;);</span>
+<span class="nc" id="L83">        resp.setCharacterEncoding(&quot;UTF-8&quot;);</span>
+<span class="nc" id="L84">        String path = req.getPathInfo();</span>
+
+<span class="nc bnc" id="L86" title="All 6 branches missed.">        if (path == null || path.equals(&quot;/&quot;) || path.equals(&quot;/session&quot;)) {</span>
+<span class="nc" id="L87">            handleGetSession(req, resp);</span>
+<span class="nc" id="L88">            return;</span>
+        }
+<span class="nc" id="L90">        String action = path.substring(1);</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if (action.equals(&quot;roles&quot;)) {</span>
+<span class="nc" id="L92">            handleGetRoles(req, resp);</span>
+        } else {
+<span class="nc" id="L94">            sendError(resp, &quot;Unknown action: &quot; + action);</span>
+        }
+<span class="nc" id="L96">    }</span>
+
+    private void handleLogin(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+<span class="nc" id="L99">        String username = req.getParameter(&quot;username&quot;);</span>
+<span class="nc" id="L100">        String password = req.getParameter(&quot;password&quot;);</span>
+<span class="nc" id="L101">        String targetRole = req.getParameter(&quot;role&quot;);</span>
+
+<span class="nc bnc" id="L103" title="All 4 branches missed.">        if (username == null || username.trim().isEmpty()) {</span>
+<span class="nc" id="L104">            sendError(resp, &quot;Username is required&quot;);</span>
+<span class="nc" id="L105">            return;</span>
+        }
+<span class="nc bnc" id="L107" title="All 4 branches missed.">        if (password == null || password.isEmpty()) {</span>
+<span class="nc" id="L108">            sendError(resp, &quot;Password is required&quot;);</span>
+<span class="nc" id="L109">            return;</span>
+        }
+
+<span class="nc" id="L112">        User user = ds.getUserByUsername(username.trim());</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L114">            sendError(resp, &quot;Invalid username or password&quot;);</span>
+<span class="nc" id="L115">            return;</span>
+        }
+
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        if (!user.checkPassword(password)) {</span>
+<span class="nc" id="L119">            sendError(resp, &quot;Invalid username or password&quot;);</span>
+<span class="nc" id="L120">            return;</span>
+        }
+
+        // 会话固定攻击防护：登录成功后创建新 session
+<span class="nc" id="L124">        HttpSession oldSession = req.getSession(false);</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if (oldSession != null) oldSession.invalidate();</span>
+<span class="nc" id="L126">        HttpSession session = req.getSession(true);</span>
+<span class="nc" id="L127">        session.setMaxInactiveInterval(30 * 60);</span>
+
+        // 角色选择
+<span class="nc bnc" id="L130" title="All 4 branches missed.">        if (targetRole != null &amp;&amp; !targetRole.trim().isEmpty()) {</span>
+<span class="nc" id="L131">            String tr = targetRole.trim().toUpperCase();</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">            if (!user.hasRole(tr)) {</span>
+<span class="nc" id="L133">                sendError(resp, &quot;You do not have permission for role: &quot; + tr);</span>
+<span class="nc" id="L134">                session.invalidate();</span>
+<span class="nc" id="L135">                return;</span>
+            }
+<span class="nc" id="L137">            session.setAttribute(&quot;currentRole&quot;, tr);</span>
+<span class="nc" id="L138">        } else {</span>
+<span class="nc bnc" id="L139" title="All 4 branches missed.">            if (user.getRoles() == null || user.getRoles().isEmpty()) {</span>
+<span class="nc" id="L140">                sendError(resp, &quot;This account has no roles assigned. Please contact administrator.&quot;);</span>
+<span class="nc" id="L141">                session.invalidate();</span>
+<span class="nc" id="L142">                return;</span>
+            }
+<span class="nc bnc" id="L144" title="All 2 branches missed.">            String defaultRole = user.hasRole(&quot;TA&quot;) ? &quot;TA&quot;</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">                    : user.hasRole(&quot;MO&quot;) ? &quot;MO&quot;</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">                    : user.hasRole(&quot;ADMIN&quot;) ? &quot;ADMIN&quot;</span>
+<span class="nc" id="L147">                    : user.getRoles().iterator().next();</span>
+<span class="nc" id="L148">            session.setAttribute(&quot;currentRole&quot;, defaultRole);</span>
+        }
+
+<span class="nc" id="L151">        session.setAttribute(&quot;username&quot;, user.getUsername());</span>
+<span class="nc" id="L152">        session.setAttribute(&quot;displayName&quot;, user.getDisplayName());</span>
+<span class="nc" id="L153">        session.setAttribute(&quot;roles&quot;, user.getRoles());</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        session.setAttribute(&quot;email&quot;, user.getEmail() != null ? user.getEmail() : &quot;&quot;);</span>
+
+        // 确保 TA 申请者记录关联
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if (user.hasRole(&quot;TA&quot;)) {</span>
+<span class="nc" id="L158">            ensureTaApplicantLinked(user.getUsername());</span>
+<span class="nc" id="L159">            ds.syncUserAndApplicantEmails(user.getUsername());</span>
+<span class="nc" id="L160">            user = ds.getUserByUsername(user.getUsername());</span>
+        }
+
+        // 生成 CSRF Token
+<span class="nc" id="L164">        String csrfToken = UUID.randomUUID().toString();</span>
+<span class="nc" id="L165">        session.setAttribute(CSRF_SESSION_ATTR, csrfToken);</span>
+
+        // 构建响应 JSON（减少重复 IO：一次性获取所需数据）
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        String email = user.getEmail() != null ? user.getEmail() : &quot;&quot;;</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        String applicantId = user.getApplicantId() != null ? user.getApplicantId() : &quot;&quot;;</span>
+<span class="nc" id="L170">        String currentRole = (String) session.getAttribute(&quot;currentRole&quot;);</span>
+
+<span class="nc" id="L172">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L173">        sb.append(&quot;{\&quot;success\&quot;:true,\&quot;message\&quot;:\&quot;Login successful\&quot;,&quot;);</span>
+<span class="nc" id="L174">        sb.append(&quot;\&quot;username\&quot;:\&quot;&quot;).append(escJson(user.getUsername())).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L175">        sb.append(&quot;\&quot;displayName\&quot;:\&quot;&quot;).append(escJson(user.getDisplayName())).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L176">        sb.append(&quot;\&quot;email\&quot;:\&quot;&quot;).append(escJson(email)).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L177">        sb.append(&quot;\&quot;applicantId\&quot;:\&quot;&quot;).append(escJson(applicantId)).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L178">        sb.append(&quot;\&quot;currentRole\&quot;:\&quot;&quot;).append(escJson(currentRole)).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L179">        sb.append(&quot;\&quot;csrfToken\&quot;:\&quot;&quot;).append(csrfToken).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L180">        sb.append(&quot;\&quot;roles\&quot;:[&quot;);</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (user.getRoles() != null) {</span>
+<span class="nc" id="L182">            int i = 0;</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            for (String r : user.getRoles()) {</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">                if (i &gt; 0) sb.append(&quot;,&quot;);</span>
+<span class="nc" id="L185">                sb.append(&quot;\&quot;&quot;).append(escJson(r)).append(&quot;\&quot;&quot;);</span>
+<span class="nc" id="L186">                i++;</span>
+<span class="nc" id="L187">            }</span>
+        }
+<span class="nc" id="L189">        sb.append(&quot;]}&quot;);</span>
+<span class="nc" id="L190">        resp.getWriter().write(sb.toString());</span>
+<span class="nc" id="L191">    }</span>
+
+    private void handleRegister(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+<span class="nc" id="L194">        String username = req.getParameter(&quot;username&quot;);</span>
+<span class="nc" id="L195">        String password = req.getParameter(&quot;password&quot;);</span>
+<span class="nc" id="L196">        String displayName = req.getParameter(&quot;displayName&quot;);</span>
+<span class="nc" id="L197">        String email = req.getParameter(&quot;email&quot;);</span>
+<span class="nc" id="L198">        String rolesStr = req.getParameter(&quot;roles&quot;);</span>
+
+<span class="nc bnc" id="L200" title="All 6 branches missed.">        if (username == null || username.trim().isEmpty()</span>
+<span class="nc bnc" id="L201" title="All 4 branches missed.">         || password == null || password.isEmpty()</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">         || displayName == null || displayName.trim().isEmpty()) {</span>
+<span class="nc" id="L203">            sendError(resp, &quot;Username, password, and display name are required&quot;);</span>
+<span class="nc" id="L204">            return;</span>
+        }
+
+<span class="nc" id="L207">        username = username.trim();</span>
+<span class="nc" id="L208">        displayName = displayName.trim();</span>
+
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (username.length() &lt; 3) {</span>
+<span class="nc" id="L211">            sendError(resp, &quot;Username must be at least 3 characters&quot;);</span>
+<span class="nc" id="L212">            return;</span>
+        }
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (username.length() &gt; 30) {</span>
+<span class="nc" id="L215">            sendError(resp, &quot;Username must be no more than 30 characters&quot;);</span>
+<span class="nc" id="L216">            return;</span>
+        }
+<span class="nc bnc" id="L218" title="All 2 branches missed.">        if (!PASSWORD_PATTERN.matcher(password).matches()) {</span>
+<span class="nc" id="L219">            sendError(resp, &quot;Password must be at least 8 characters and contain both letters and numbers&quot;);</span>
+<span class="nc" id="L220">            return;</span>
+        }
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        if (password.length() &gt; 128) {</span>
+<span class="nc" id="L223">            sendError(resp, &quot;Password is too long&quot;);</span>
+<span class="nc" id="L224">            return;</span>
+        }
+<span class="nc bnc" id="L226" title="All 2 branches missed.">        if (!username.matches(&quot;^[a-zA-Z0-9_]+$&quot;)) {</span>
+<span class="nc" id="L227">            sendError(resp, &quot;Username can only contain letters, numbers, and underscores&quot;);</span>
+<span class="nc" id="L228">            return;</span>
+        }
+
+<span class="nc bnc" id="L231" title="All 2 branches missed.">        if (ds.getUserByUsername(username) != null) {</span>
+<span class="nc" id="L232">            sendError(resp, &quot;Username already exists&quot;);</span>
+<span class="nc" id="L233">            return;</span>
+        }
+
+<span class="nc" id="L236">        Set&lt;String&gt; roles = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L237" title="All 4 branches missed.">        if (rolesStr != null &amp;&amp; !rolesStr.trim().isEmpty()) {</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">            for (String r : rolesStr.split(&quot;,&quot;)) {</span>
+<span class="nc" id="L239">                String role = r.trim().toUpperCase();</span>
+<span class="nc bnc" id="L240" title="All 6 branches missed.">                if (role.equals(&quot;TA&quot;) || role.equals(&quot;MO&quot;) || role.equals(&quot;ADMIN&quot;)) {</span>
+<span class="nc" id="L241">                    roles.add(role);</span>
+                }
+            }
+        }
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if (roles.isEmpty()) roles.add(&quot;TA&quot;);</span>
+
+<span class="nc" id="L247">        User user = new User(username, User.hashPassword(password), displayName, &quot;&quot;);</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        user.setEmail(email != null ? email.trim() : &quot;&quot;);</span>
+<span class="nc bnc" id="L249" title="All 2 branches missed.">        for (String r : roles) user.addRole(r);</span>
+
+<span class="nc" id="L251">        ds.saveUser(user);</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">        if (user.hasRole(&quot;TA&quot;)) {</span>
+<span class="nc" id="L253">            ensureTaApplicantLinked(user.getUsername());</span>
+        }
+<span class="nc" id="L255">        ds.addLog(SystemLog.OP_WRITE, &quot;users.json&quot;, SystemLog.STATUS_OK);</span>
+
+<span class="nc" id="L257">        HttpSession session = req.getSession(true);</span>
+<span class="nc" id="L258">        session.setMaxInactiveInterval(30 * 60);</span>
+<span class="nc" id="L259">        session.setAttribute(&quot;username&quot;, user.getUsername());</span>
+<span class="nc" id="L260">        session.setAttribute(&quot;displayName&quot;, user.getDisplayName());</span>
+<span class="nc" id="L261">        session.setAttribute(&quot;roles&quot;, user.getRoles());</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        session.setAttribute(&quot;email&quot;, user.getEmail() != null ? user.getEmail() : &quot;&quot;);</span>
+<span class="nc" id="L263">        String csrfToken = UUID.randomUUID().toString();</span>
+<span class="nc" id="L264">        session.setAttribute(CSRF_SESSION_ATTR, csrfToken);</span>
+
+<span class="nc" id="L266">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L267">        sb.append(&quot;{\&quot;success\&quot;:true,\&quot;message\&quot;:\&quot;Registration successful\&quot;,&quot;);</span>
+<span class="nc" id="L268">        sb.append(&quot;\&quot;username\&quot;:\&quot;&quot;).append(escJson(user.getUsername())).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L269">        sb.append(&quot;\&quot;csrfToken\&quot;:\&quot;&quot;).append(csrfToken).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L270">        sb.append(&quot;\&quot;roles\&quot;:[&quot;);</span>
+<span class="nc" id="L271">        int i = 0;</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        for (String r : user.getRoles()) {</span>
+<span class="nc bnc" id="L273" title="All 2 branches missed.">            if (i &gt; 0) sb.append(&quot;,&quot;);</span>
+<span class="nc" id="L274">            sb.append(&quot;\&quot;&quot;).append(escJson(r)).append(&quot;\&quot;&quot;);</span>
+<span class="nc" id="L275">            i++;</span>
+<span class="nc" id="L276">        }</span>
+<span class="nc" id="L277">        sb.append(&quot;]}&quot;);</span>
+<span class="nc" id="L278">        resp.getWriter().write(sb.toString());</span>
+<span class="nc" id="L279">    }</span>
+
+    private void handleLogout(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+<span class="nc" id="L282">        HttpSession session = req.getSession(false);</span>
+<span class="nc bnc" id="L283" title="All 2 branches missed.">        if (session != null) session.invalidate();</span>
+<span class="nc" id="L284">        resp.getWriter().write(&quot;{\&quot;success\&quot;:true,\&quot;message\&quot;:\&quot;Logged out successfully\&quot;}&quot;);</span>
+<span class="nc" id="L285">    }</span>
+
+    private void handleSwitchRole(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+<span class="nc" id="L288">        HttpSession session = req.getSession(false);</span>
+<span class="nc bnc" id="L289" title="All 4 branches missed.">        if (session == null || session.getAttribute(&quot;username&quot;) == null) {</span>
+<span class="nc" id="L290">            sendError(resp, &quot;Not logged in&quot;);</span>
+<span class="nc" id="L291">            return;</span>
+        }
+<span class="nc bnc" id="L293" title="All 2 branches missed.">        if (!validateCsrf(req, resp)) return;</span>
+
+<span class="nc" id="L295">        String rawRole = req.getParameter(&quot;role&quot;);</span>
+<span class="nc bnc" id="L296" title="All 4 branches missed.">        if (rawRole == null || rawRole.trim().isEmpty()) {</span>
+<span class="nc" id="L297">            sendError(resp, &quot;Role is required&quot;);</span>
+<span class="nc" id="L298">            return;</span>
+        }
+<span class="nc" id="L300">        String targetRole = rawRole.trim().toUpperCase();</span>
+<span class="nc bnc" id="L301" title="All 6 branches missed.">        if (!targetRole.equals(&quot;TA&quot;) &amp;&amp; !targetRole.equals(&quot;MO&quot;) &amp;&amp; !targetRole.equals(&quot;ADMIN&quot;)) {</span>
+<span class="nc" id="L302">            sendError(resp, &quot;Invalid role&quot;);</span>
+<span class="nc" id="L303">            return;</span>
+        }
+
+        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L307">        Set&lt;String&gt; userRoles = (Set&lt;String&gt;) session.getAttribute(&quot;roles&quot;);</span>
+<span class="nc bnc" id="L308" title="All 4 branches missed.">        if (userRoles == null || !userRoles.contains(targetRole)) {</span>
+<span class="nc" id="L309">            sendError(resp, &quot;You do not have permission for role: &quot; + targetRole + &quot;. Please re-login.&quot;);</span>
+<span class="nc" id="L310">            return;</span>
+        }
+
+<span class="nc" id="L313">        session.setAttribute(&quot;currentRole&quot;, targetRole);</span>
+<span class="nc" id="L314">        String csrfToken = (String) session.getAttribute(CSRF_SESSION_ATTR);</span>
+<span class="nc" id="L315">        resp.getWriter().write(&quot;{\&quot;success\&quot;:true,\&quot;currentRole\&quot;:\&quot;&quot; + escJson(targetRole)</span>
+<span class="nc bnc" id="L316" title="All 2 branches missed.">                + &quot;\&quot;,\&quot;csrfToken\&quot;:\&quot;&quot; + escJson(csrfToken != null ? csrfToken : &quot;&quot;) + &quot;\&quot;}&quot;);</span>
+<span class="nc" id="L317">    }</span>
+
+    private void handleGetSession(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+<span class="nc" id="L320">        HttpSession session = req.getSession(false);</span>
+<span class="nc bnc" id="L321" title="All 4 branches missed.">        if (session == null || session.getAttribute(&quot;username&quot;) == null) {</span>
+<span class="nc" id="L322">            resp.getWriter().write(&quot;{\&quot;authenticated\&quot;:false}&quot;);</span>
+<span class="nc" id="L323">            return;</span>
+        }
+
+<span class="nc" id="L326">        String username = (String) session.getAttribute(&quot;username&quot;);</span>
+<span class="nc" id="L327">        User user = ds.getUserByUsername(username);</span>
+<span class="nc" id="L328">        String currentRole = (String) session.getAttribute(&quot;currentRole&quot;);</span>
+<span class="nc" id="L329">        String csrfToken = (String) session.getAttribute(CSRF_SESSION_ATTR);</span>
+
+        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L332">        Set&lt;String&gt; roles = (Set&lt;String&gt;) session.getAttribute(&quot;roles&quot;);</span>
+<span class="nc bnc" id="L333" title="All 4 branches missed.">        if (roles == null &amp;&amp; user != null) roles = user.getRoles();</span>
+
+<span class="nc bnc" id="L335" title="All 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L336">            resp.getWriter().write(&quot;{\&quot;authenticated\&quot;:false}&quot;);</span>
+<span class="nc" id="L337">            return;</span>
+        }
+
+<span class="nc bnc" id="L340" title="All 2 branches missed.">        if (user.hasRole(&quot;TA&quot;)) {</span>
+<span class="nc" id="L341">            ensureTaApplicantLinked(username);</span>
+<span class="nc" id="L342">            ds.syncUserAndApplicantEmails(username);</span>
+<span class="nc" id="L343">            user = ds.getUserByUsername(username);</span>
+        }
+
+<span class="nc bnc" id="L346" title="All 6 branches missed.">        if (currentRole != null &amp;&amp; roles != null &amp;&amp; !roles.contains(currentRole)) {</span>
+<span class="nc" id="L347">            session.removeAttribute(&quot;currentRole&quot;);</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">            if (!roles.isEmpty()) {</span>
+<span class="nc" id="L349">                currentRole = roles.iterator().next();</span>
+<span class="nc" id="L350">                session.setAttribute(&quot;currentRole&quot;, currentRole);</span>
+            } else {
+<span class="nc" id="L352">                session.invalidate();</span>
+<span class="nc" id="L353">                resp.getWriter().write(&quot;{\&quot;authenticated\&quot;:false}&quot;);</span>
+<span class="nc" id="L354">                return;</span>
+            }
+        }
+
+<span class="nc bnc" id="L358" title="All 2 branches missed.">        String email = user.getEmail() != null ? user.getEmail() : &quot;&quot;;</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">        String applicantId = user.getApplicantId() != null ? user.getApplicantId() : &quot;&quot;;</span>
+<span class="nc" id="L360">        session.setAttribute(&quot;email&quot;, email);</span>
+
+<span class="nc" id="L362">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L363">        sb.append(&quot;{\&quot;authenticated\&quot;:true,&quot;);</span>
+<span class="nc" id="L364">        sb.append(&quot;\&quot;username\&quot;:\&quot;&quot;).append(escJson(user.getUsername())).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L365">        sb.append(&quot;\&quot;displayName\&quot;:\&quot;&quot;).append(escJson(user.getDisplayName())).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L366">        sb.append(&quot;\&quot;email\&quot;:\&quot;&quot;).append(escJson(email)).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L367">        sb.append(&quot;\&quot;applicantId\&quot;:\&quot;&quot;).append(escJson(applicantId)).append(&quot;\&quot;,&quot;);</span>
+<span class="nc bnc" id="L368" title="All 2 branches missed.">        sb.append(&quot;\&quot;currentRole\&quot;:\&quot;&quot;).append(escJson(currentRole != null ? currentRole : &quot;&quot;)).append(&quot;\&quot;,&quot;);</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">        sb.append(&quot;\&quot;csrfToken\&quot;:\&quot;&quot;).append(escJson(csrfToken != null ? csrfToken : &quot;&quot;)).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L370">        sb.append(&quot;\&quot;roles\&quot;:[&quot;);</span>
+<span class="nc bnc" id="L371" title="All 2 branches missed.">        if (roles != null) {</span>
+<span class="nc" id="L372">            int i = 0;</span>
+<span class="nc bnc" id="L373" title="All 2 branches missed.">            for (String r : roles) {</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">                if (i &gt; 0) sb.append(&quot;,&quot;);</span>
+<span class="nc" id="L375">                sb.append(&quot;\&quot;&quot;).append(escJson(r)).append(&quot;\&quot;&quot;);</span>
+<span class="nc" id="L376">                i++;</span>
+<span class="nc" id="L377">            }</span>
+        }
+<span class="nc" id="L379">        sb.append(&quot;]}&quot;);</span>
+<span class="nc" id="L380">        resp.getWriter().write(sb.toString());</span>
+<span class="nc" id="L381">    }</span>
+
+    private void handleGetRoles(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+<span class="nc" id="L384">        HttpSession session = req.getSession(false);</span>
+<span class="nc bnc" id="L385" title="All 4 branches missed.">        if (session == null || session.getAttribute(&quot;username&quot;) == null) {</span>
+<span class="nc" id="L386">            sendError(resp, &quot;Not authenticated&quot;);</span>
+<span class="nc" id="L387">            return;</span>
+        }
+        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L390">        Set&lt;String&gt; roles = (Set&lt;String&gt;) session.getAttribute(&quot;roles&quot;);</span>
+<span class="nc" id="L391">        String currentRole = (String) session.getAttribute(&quot;currentRole&quot;);</span>
+<span class="nc" id="L392">        String csrfToken = (String) session.getAttribute(CSRF_SESSION_ATTR);</span>
+
+<span class="nc" id="L394">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L395" title="All 2 branches missed.">        sb.append(&quot;{\&quot;currentRole\&quot;:\&quot;&quot;).append(escJson(currentRole != null ? currentRole : &quot;&quot;)).append(&quot;\&quot;,&quot;);</span>
+<span class="nc bnc" id="L396" title="All 2 branches missed.">        sb.append(&quot;\&quot;csrfToken\&quot;:\&quot;&quot;).append(escJson(csrfToken != null ? csrfToken : &quot;&quot;)).append(&quot;\&quot;,&quot;);</span>
+<span class="nc" id="L397">        sb.append(&quot;\&quot;roles\&quot;:[&quot;);</span>
+<span class="nc bnc" id="L398" title="All 2 branches missed.">        if (roles != null) {</span>
+<span class="nc" id="L399">            int i = 0;</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">            for (String r : roles) {</span>
+<span class="nc bnc" id="L401" title="All 2 branches missed.">                if (i &gt; 0) sb.append(&quot;,&quot;);</span>
+<span class="nc" id="L402">                sb.append(&quot;\&quot;&quot;).append(escJson(r)).append(&quot;\&quot;&quot;);</span>
+<span class="nc" id="L403">                i++;</span>
+<span class="nc" id="L404">            }</span>
+        }
+<span class="nc" id="L406">        sb.append(&quot;]}&quot;);</span>
+<span class="nc" id="L407">        resp.getWriter().write(sb.toString());</span>
+<span class="nc" id="L408">    }</span>
+
+    private void ensureTaApplicantLinked(String username) {
+<span class="nc" id="L411">        User user = ds.getUserByUsername(username);</span>
+<span class="nc bnc" id="L412" title="All 4 branches missed.">        if (user == null || !user.hasRole(&quot;TA&quot;)) return;</span>
+
+<span class="nc" id="L414">        String aid = user.getApplicantId();</span>
+<span class="nc bnc" id="L415" title="All 4 branches missed.">        TAPplicant linked = (aid != null &amp;&amp; !aid.isEmpty()) ? ds.getApplicantById(aid) : null;</span>
+
+<span class="nc bnc" id="L417" title="All 2 branches missed.">        if (linked != null) {</span>
+<span class="nc" id="L418">            return;</span>
+        }
+
+<span class="nc bnc" id="L421" title="All 4 branches missed.">        if (aid != null &amp;&amp; !aid.isEmpty()) user.setApplicantId(null);</span>
+
+<span class="nc" id="L423">        String id = ds.allocateNextApplicantId();</span>
+<span class="nc bnc" id="L424" title="All 4 branches missed.">        String nm = (user.getDisplayName() != null &amp;&amp; !user.getDisplayName().isEmpty())</span>
+<span class="nc" id="L425">                ? user.getDisplayName() : user.getUsername();</span>
+<span class="nc bnc" id="L426" title="All 2 branches missed.">        String em = user.getEmail() != null ? user.getEmail().trim() : &quot;&quot;;</span>
+<span class="nc" id="L427">        TAPplicant ta = new TAPplicant(id, nm, em, &quot;&quot;, 0.0, new ArrayList&lt;&gt;(), 0);</span>
+<span class="nc" id="L428">        ds.saveApplicant(ta);</span>
+<span class="nc" id="L429">        user.setApplicantId(id);</span>
+<span class="nc" id="L430">        ds.saveUser(user);</span>
+<span class="nc" id="L431">    }</span>
+
+    /** 演示环境：不校验 CSRF，避免表单/请求格式不一致导致无法切换角色。 */
+    private boolean validateCsrf(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+<span class="nc" id="L435">        return true;</span>
+    }
+
+    private void sendError(HttpServletResponse resp, String message) throws IOException {
+<span class="nc" id="L439">        resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);</span>
+<span class="nc" id="L440">        resp.getWriter().write(&quot;{\&quot;success\&quot;:false,\&quot;error\&quot;:\&quot;&quot; + escJson(message) + &quot;\&quot;}&quot;);</span>
+<span class="nc" id="L441">    }</span>
+
+    /**
+     * JSON 字符串转义（仅转义 JSON 元字符，不处理 HTML 特殊字符）。
+     * 用于嵌入 JSON 响应。
+     */
+    private String escJson(String s) {
+<span class="nc bnc" id="L448" title="All 2 branches missed.">        if (s == null) return &quot;&quot;;</span>
+<span class="nc" id="L449">        return s.replace(&quot;\\&quot;, &quot;\\\\&quot;)</span>
+<span class="nc" id="L450">                .replace(&quot;\&quot;&quot;, &quot;\\\&quot;&quot;)</span>
+<span class="nc" id="L451">                .replace(&quot;\n&quot;, &quot;\\n&quot;)</span>
+<span class="nc" id="L452">                .replace(&quot;\r&quot;, &quot;\\r&quot;)</span>
+<span class="nc" id="L453">                .replace(&quot;\t&quot;, &quot;\\t&quot;);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

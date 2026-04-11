@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.bupt</groupId>
+    <artifactId>smartta</artifactId>
+    <version>3.0</version>
+    <packaging>jar</packaging>
+
+    <name>Smart-TA Unit Tests</name>
+    <description>
+        Smart-TA TA Recruitment System — JUnit 5 单元测试套件。
+        覆盖模型类（Application / Position / TAPplicant / MoTaMessage / User / SystemLog），
+        并对 ApiServlet 核心业务逻辑（状态流转、权限校验、API 端点）进行 mock 测试。
+    </description>
+
+    <!-- ============================================================
+         属性配置
+         ============================================================ -->
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- 测试报告编码 -->
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <!-- 各依赖版本锁定 -->
+        <junit.version>5.11.4</junit.version>
+        <mockito.version>5.14.2</mockito.version>
+        <assertj.version>3.27.3</assertj.version>
+    </properties>
+
+    <!-- ============================================================
+         依赖管理
+         ============================================================ -->
+    <dependencies>
+        <!-- ── JUnit 5（JUnit Jupiter）── -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- JUnit 5 参数化测试支持 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ── Mockito（mock 对象）── -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Mockito 与 JUnit 5 集成（MockitoExtension） -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ── AssertJ（流畅断言）── -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ── Servlet API（provided by Tomcat，测试用 stub）── -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ── Jackson（JSON 处理，生产代码 DataStore 和测试都需要）── -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.3</version>
+            <!-- 去掉 scope，默认为 compile，使生产代码编译时也能使用 -->
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>2.17.3</version>
+        </dependency>
+
+        <!-- ── 项目源码（通过 sourceDirectory 配置编译）── -->
+    </dependencies>
+
+    <!-- ============================================================
+         构建配置
+         ============================================================ -->
+    <build>
+        <!-- 主源码目录 -->
+        <sourceDirectory>src/main/java</sourceDirectory>
+
+        <testResources>
+            <testResource>
+                <!-- 测试资源文件（data/ 目录下的 JSON 文件副本） -->
+                <directory>src/test/resources</directory>
+                <includes>
+                    <include>**/*.json</include>
+                </includes>
+            </testResource>
+        </testResources>
+
+        <plugins>
+            <!-- ── Maven Compiler Plugin ── -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                    <encoding>UTF-8</encoding>
+                    <!-- 警告视为错误关闭（方便开发） -->
+                    <failOnWarning>false</failOnWarning>
+                </configuration>
+            </plugin>
+
+            <!-- ── Maven Surefire Plugin（运行测试）── -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+                <configuration>
+                    <encoding>UTF-8</encoding>
+                    <!-- 每个测试类并行执行（可加速） -->
+                    <parallel>classes</parallel>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+
+            <!-- ── JaCoCo Plugin（代码覆盖率报告）── -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- ── Maven Surefire Report Plugin（生成 HTML 测试报告）── -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-report-plugin</artifactId>
+                <version>3.5.2</version>
+                <configuration>
+                    <outputName>TEST-results</outputName>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

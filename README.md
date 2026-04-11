@@ -64,34 +64,36 @@ Module Organisers can hover over any candidate's score to view a full **AI Expla
 
 Administrators have a global **Workload Distribution Panel** that visualises every TA's committed hours against the 20-hour institutional cap. When a TA exceeds the limit, the system:
 1. Flags the overload with a visual warning (red bar + OVERLOAD label)
-2. Triggers an **AI Rebalancing Recommendation** — "Apply Suggestion" reduces the overloaded TA's hours by 4 via `POST /api/rebalance`
-3. Logs the event to `system_logs.json`
+2. Triggers an **AI Rebalancing Recommendation** via DeepSeek LLM — "Apply Suggestion" reduces the overloaded TA's hours via `POST /api/rebalance`
+3. Falls back to a fixed 4-hour reduction rule if the AI service is unavailable
+4. Logs the event to `system_logs.json`
 
-### 🗂️ Zero-Database JSON Persistence
+### 💬 MO ↔ TA In-System Messaging
+
+A bidirectional message channel enables direct communication between Module Organisers and their recruited TAs:
+- **TA Side**: "My Positions" shows accepted offers; clicking an MO opens the message thread
+- **MO Side**: "My TAs" lists recruited assistants; unread badge on the Messages tab
+- Messages are persisted to `mo_ta_messages.json` and support marking as read
+
+### 📄 CV Management
+
+TAs can upload their CV once and MO/Admin can download it:
+- **TA**: Upload CV (PDF/DOC/DOCX) via `UploadServlet` → stored in `cv_uploads/`
+- **MO**: Download from applicant profile in the "My TAs" or applicant review panel
+- **Admin**: Access via applicant management panel
+
+### 🔐 Role-Based Access Control
+
+Multi-role user accounts with fine-grained permission control:
+- **TA**: Browse positions, apply, manage profile, view accepted positions, send/receive messages
+- **MO**: Post modules, review applicants, accept/reject, download TA CVs, send/receive messages
+- **Admin**: Full system access — workload management, user management, applicant management, logs
+
+### 🗂 Zero-Database JSON Persistence
 
 All data is stored as JSON files under `webapps/SmartTA/data/` via `JsonFileStore`. On first startup, seed data is generated for positions, applicants, users, and applications. The Admin panel includes:
-- A **System Activity Log** viewer showing timestamped read/write/error events
+- A **System Activity Log** viewer showing timestamped read/write events
 - A **File Storage Status** dashboard reporting the health of each JSON data file
-
-### 🔐 Authentication & Role-Based Access
-
-All pages are protected by session-based authentication via `AuthServlet`. Users register with a username, password (hashed with SHA-256), and one or more roles (TA, MO, Admin). After login, the landing page (`index.jsp`) presents available roles; selecting one redirects to the appropriate dashboard. The `SecurityHeadersFilter` adds security headers to every response, including Content-Security-Policy and X-Frame-Options.
-
-### 📤 CV Upload
-
-Teaching Assistants can upload their CV/resume via `UploadServlet` (`POST /upload`). The filename is stored in the applicant's profile, and uploaded files are saved under `SmartTA/cv_uploads/`.
-
-### ⚙️ System Configuration API
-
-A `SystemConfig` model backed by `system_config.json` provides the frontend with all runtime constants — demo accounts, workload cap (20 h/week), position defaults, skill suggestions, and data traceability paths — eliminating hard-coded values from JSP pages.
-
-### 🏷️ Application State Machine
-
-Applications follow a strict state transition model: `Submitted` → `Under Review` → `Accepted` | `Rejected`. The backend enforces this rule in `ApiServlet` and rejects invalid transitions. Accepted/Rejected states are terminal and cannot be rolled back.
-
-### 🔎 Optimised Query Performance
-
-`DataStore` maintains two in-memory indexes over the application list — one keyed by applicant ID, one by position code — enabling O(1) lookups instead of O(n) scans. Atomic ID allocation via `AtomicInteger` prevents duplicate IDs under concurrent load.
 
 ---
 
@@ -142,11 +144,13 @@ flowchart TD
 | Layer | Technology | Notes |
 |-------|-----------|-------|
 | **Frontend** | HTML5, CSS3 (Custom Properties), Vanilla JavaScript | JSP-based role dashboards; live API calls to backend |
-| **Backend** | Java Servlet (Jakarta EE 10), Apache Tomcat 10.1 | REST API via ApiServlet; session-based auth with role switching |
+| **Backend** | Java 17, Jakarta Servlet 6.0, Apache Tomcat 10.1 | REST API via ApiServlet; session-based auth with role switching |
 | **Persistence** | JSON flat-files via JsonFileStore | Runtime data at webapps/SmartTA/data/; no SQL or NoSQL DB |
-| **AI Engine** | Composite scoring engine | Weighted formula: 0.4 Skill + 0.3 GPA + 0.3 Availability |
+| **AI Engine** | Composite scoring engine + DeepSeek LLM API | Weighted formula: 0.4 Skill + 0.3 GPA + 0.3 Availability; AI match analysis and workload rebalancing |
 | **Design System** | CSS Custom Properties (Design Tokens) | 20+ tokens for colours, spacing, shadows, and typography |
 | **Typography** | Google Fonts (DM Sans, Playfair Display) | Loaded via CDN for consistent cross-browser rendering |
+| **Testing** | JUnit 5, Mockito, AssertJ, JaCoCo | 162 unit tests with coverage reports |
+| **Build** | Maven | Dependency management and build automation |
 | **Methodology** | Agile Scrum (4 iterations) | Product Backlog managed in structured format |
 
 ### Backend stack (`SmartTA/`)
@@ -156,16 +160,15 @@ The deployable web application runs on **Apache Tomcat 10.1+** with **Jakarta EE
 | Component | Technology | Role |
 |-----------|------------|------|
 | **Runtime** | Apache Tomcat 10.x | Servlet container; exploded WAR under `webapps/SmartTA/` |
-| **Language** | Java | Business logic, models, JSON API |
-| **Views** | JSP (`index.jsp`, `login.html`, `register.html`, `ta.jsp`, `mo.jsp`, `admin.jsp`, `error.jsp`) | Role-based dashboards + auth pages; client-side JS calls REST endpoints |
+| **Language** | Java 17 | Business logic, models, JSON API |
+| **Views** | JSP (`index.jsp`, `ta.jsp`, `mo.jsp`, `admin.jsp`, `error.jsp`) | Role-based dashboards; client-side JS calls REST endpoints |
 | **REST API** | `ApiServlet` → `/api/*` | JSON over HTTP: positions, applicants, applications, logs, workloads, scoring, apply/update flows |
-| **Authentication** | `AuthServlet` → `/auth/*` | Session-based login, register, logout, role switching; SHA-256 password hashing |
-| **Security** | `SecurityHeadersFilter` → `/*` | Security headers (X-Content-Type-Options, X-Frame-Options, CSP) on every response |
-| **Upload** | `UploadServlet` → `/upload` | Handles CV file uploads for TA applicants |
+| **Authentication** | `AuthServlet` → `/auth/*` | Session-based login, logout, role switching |
 | **Serialization** | Jackson (databind) | Read/write JSON for persistence and API responses |
-| **Data access** | `DataStore` + `JsonFileStore` | Singleton in-memory cache with atomic flush to `data/*.json`; concurrent ID allocation via `AtomicInteger` |
-| **System config** | `SystemConfig` model + `system_config.json` | Centralised runtime config: demo accounts, workload thresholds, position defaults, skill suggestions, data traceability paths |
-| **Config** | `WEB-INF/web.xml` | Servlet mappings, welcome file, error pages, filter registration |
+| **Data access** | `DataStore` + `JsonFileStore` | Singleton in-memory cache with flush to `data/*.json` |
+| **AI Integration** | `LLMService` + DeepSeek API | AI match analysis, workload rebalancing recommendations |
+| **Security** | `SecurityHeadersFilter` | HTTP security headers (XSS, clickjacking protection) |
+| **Config** | `WEB-INF/web.xml` | Servlet mappings, welcome file, error pages |
 
 > **No SQL/NoDB:** The system stores all data as JSON files via `JsonFileStore` under `webapps/SmartTA/data/`. This satisfies the EBU6304 No-DB constraint while providing real persistence — not a simulation. Each write operation (position creation, application submission, profile update) is immediately flushed to disk and reflected in subsequent reads.
 
@@ -187,29 +190,49 @@ Runs client-side in any modern browser. No build tooling required.
 
 ### Option B — Full Application (Tomcat Backend)
 
+#### Option 1: Maven Build (Recommended)
+
 ```bash
-# 1. Copy SmartTA/ into Tomcat webapps
-xcopy /E /I SmartTA D:\Tomcat\apache-tomcat-10.1.48\webapps\SmartTA\
-
-# 2. Compile the Java backend (Windows batch script included)
+# 1. Navigate to SmartTA directory
 cd SmartTA
-compile_smartta.bat
 
-# 3. Start Tomcat and open in browser
-#   (bin/startup.bat from your Tomcat installation)
-http://localhost:8080/SmartTA/
+# 2. Run unit tests (optional)
+mvn test
+
+# 3. Deploy to Tomcat
+cp target/smartta-3.0.jar D:\Tomcat\apache-tomcat-10.1.48\webapps\SmartTA\
+
+# 4. Restart Tomcat and open in browser
+# http://localhost:8080/SmartTA/
 ```
 
-Sources live under `src/main/java/`. `compile_smartta.bat` compiles all `.java` files into `WEB-INF/classes/`. On first deployment, `DataStore` seeds `data/*.json` automatically — no manual setup required.
+#### Option 2: Manual Deployment
 
-**Demo accounts** (all with password `ta123` unless noted otherwise):
+```bash
+# 1. Copy SmartTA/ into Tomcat webapps
+cp -r SmartTA D:\Tomcat\apache-tomcat-10.1.48\webapps\
+
+# 2. Compile the Java backend
+cd SmartTA
+javac -encoding UTF-8 -cp "D:\Tomcat\apache-tomcat-10.1.48\lib\*" -d WEB-INF/classes `
+    src/main/java/com/bupt/smartta/model/*.java
+    src/main/java/com/bupt/smartta/servlet/*.java
+    src/main/java/com/bupt/smartta/util/*.java
+    src/main/java/com/bupt/smartta/filter/*.java
+    src/main/java/com/bupt/smartta/listener/*.java
+
+# 3. Restart Tomcat and open in browser
+# http://localhost:8080/SmartTA/
+```
+
+#### Demo Accounts
 
 | Username | Password | Role |
-|----------|----------|------|
-| admin | admin123 | ADMIN, MO, TA |
-| mosmith | mo123 | MO, TA |
-| zhangwei | ta123 | TA |
-| limei | ta123 | TA |
+|---------|----------|------|
+| `admin` | `admin123` | Administrator |
+| `mosmith` | `mo123` | Module Organiser |
+| `zhangwei` | `ta123` | Teaching Assistant |
+| `limei` | `ta123` | Teaching Assistant |
 
 ---
 
@@ -222,7 +245,7 @@ The interactive prototype covers three role-based dashboards, each accessible vi
 | Feature | Description |
 |---------|-------------|
 | **Available Positions** | Filterable job listing with AI match scores and hover-to-explain tooltips |
-| **My Applications** | Visual timeline tracker showing each application's progress (Submitted → Under Review → Accepted / Rejected) |
+| **My Applications** | Visual timeline tracker showing each application's progress (Submitted → Review → Interview → Decision) |
 | **Skill Management** | Add/remove skill tags interactively; changes trigger simulated file-save feedback |
 | **AI Skill-Gap Analysis** | Sidebar panel highlighting missing skills and trending demand this semester |
 
@@ -251,6 +274,8 @@ Development follows a four-iteration Agile Scrum cycle. Each iteration delivers 
 
 ### Smart-TA Development Roadmap
 
+### Smart-TA Development Roadmap
+
 ```mermaid
 %%{init: {'theme':'base','themeCSS':'.grid .tick text{font-size:13px!important;fill:#0f172a!important;font-weight:600!important;}.grid .tick line{opacity:0.85;}.today line{stroke:#1d4ed8!important;stroke-width:3.5px!important;opacity:1!important;stroke-dasharray:none!important;stroke-linecap:round!important;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 8px rgba(29,78,216,0.85)) drop-shadow(0 0 14px rgba(37,99,235,0.45));}','themeVariables':{'primaryColor':'#2563eb','primaryTextColor':'#ffffff','secondaryColor':'#64748b','tertiaryColor':'#475569','lineColor':'#94a3b8','textColor':'#334155','titleColor':'#1e293b','taskBkgColor':'#475569','taskTextColor':'#ffffff','taskTextLightColor':'#ffffff','taskTextDarkColor':'#ffffff','taskTextOutsideColor':'#0f172a','activeTaskBkgColor':'#2563eb','activeTaskBorderColor':'#1d4ed8','gridColor':'#cbd5e1','todayLineColor':'#1d4ed8'},'gantt':{'useWidth':2360,'useMaxWidth':true,'leftPadding':130,'rightPadding':460,'barHeight':36,'barGap':14,'fontSize':14,'sectionFontSize':15,'titleTopMargin':20,'topPadding':96}}}%%
 gantt
@@ -269,10 +294,11 @@ gantt
     Usability Heuristic Review                   :done, i2c, after i2b, 3d
 
     section Iteration 3 — Core Implementation
-    TA Profile & Application Workflow            :active, i3a, 2026-03-24, 18d
-    MO Posting & Applicant Review Module          :active, i3b, 2026-03-31, 14d
-    AI Composite Scoring Engine                   :active, i3c, 2026-04-01, 12d
-    File I/O Persistence Layer                   :active, i3d, 2026-04-05, 10d
+    TA Profile & Application Workflow            :done, i3a, 2026-03-24, 18d
+    MO Posting & Applicant Review Module          :done, i3b, 2026-03-31, 14d
+    AI Composite Scoring Engine                   :done, i3c, 2026-04-01, 12d
+    File I/O Persistence Layer                   :done, i3d, 2026-04-05, 10d
+    MO↔TA Messaging & CV Download                :done, i3e, 2026-04-10, 5d
 
     section Iteration 4 — Testing & Delivery
     Testing & UAT                                   :i4a, 2026-04-14, 14d
@@ -286,7 +312,7 @@ gantt
 |-----------|-------|-----------------|
 | **1** | Foundation | Stakeholder interviews (3 MOs, 5 TAs), survey results, 18 user stories with MoSCoW priorities, acceptance criteria, Product Backlog v1.0 |
 | **2** | Design | System architecture diagram, UML class/sequence diagrams, interactive HTML prototype with 3 role-based dashboards |
-| **3** | Implementation | TA profile + job application workflow, MO posting + applicant review, AI scoring engine, JSON file persistence (`data/*.json`), session-based authentication (AuthServlet + SHA-256 passwords), role switching, SecurityHeadersFilter, SystemConfig API, CV upload (UploadServlet), optimised application indexing |
+| **3** | Implementation | TA profile + job application workflow, MO posting + applicant review, AI scoring engine, file I/O persistence, MO↔TA messaging, CV download, DeepSeek LLM integration, 162 JUnit tests |
 | **4** | Delivery | JUnit integration tests, UAT scenarios, final report, demonstration video |
 
 ---
@@ -323,38 +349,37 @@ Based on the first-assessment feedback, the following improvements have been mad
 ```text
 EBU6304-Group-37/
 ├── Prototype_group37.html       # Interactive UI prototype (standalone, no backend)
-├── Report_group37.docx          # System analysis & design report
-├── README.md                    # Project overview (you are here)
-└── SmartTA/                    # Tomcat Servlet/JSP application
+├── EBU6304_GroupProjectHandout.pdf  # Project handout
+├── README.md                   # Project overview (you are here)
+└── SmartTA/                   # Tomcat Servlet/JSP backend (v3.0)
+    ├── pom.xml                 # Maven build configuration (JUnit 5, JaCoCo)
     ├── src/main/java/com/bupt/smartta/
-    │   ├── model/               # TAPplicant, Position, Application, SystemLog, SystemConfig, User
-    │   ├── servlet/             # ApiServlet (REST API), AuthServlet (auth), UploadServlet (CV upload)
-    │   ├── filter/              # SecurityHeadersFilter (CSP, X-Frame-Options headers)
-    │   ├── listener/            # AppContextListener (application lifecycle hooks)
-    │   └── util/                # JsonFileStore (JSON I/O), DataStore (singleton cache + indexing)
-    ├── WEB-INF/
-    │   ├── web.xml              # Servlet mappings, filter chain, welcome files, error pages
-    │   ├── lib/                 # Jackson JARs for JSON serialisation
-    │   └── classes/             # Compiled .class files (mirrors src/main/java layout)
-    ├── css/
-    │   └── smartta-shell.css    # Shared design tokens and base styles
-    ├── index.jsp                # Role-selection landing page (post-login)
-    ├── login.html               # Login form
-    ├── register.html            # Registration form
-    ├── ta.jsp                   # TA Dashboard
-    ├── mo.jsp                   # MO Portal
-    ├── admin.jsp                # Admin Overview
-    ├── error.jsp                # Error page
-    ├── data/                    # JSON persistence (positions.json, applicants.json,
-    │                            #   applications.json, workloads.json, users.json,
-    │                            #   system_logs.json, system_config.json)
-    ├── cv_uploads/              # Uploaded CV files
-    └── README.md                # Deployment guide
+    │   ├── model/              # TAPplicant, Position, Application, SystemLog, MoTaMessage, User, SystemConfig
+    │   ├── servlet/            # ApiServlet, AuthServlet, UploadServlet, DownloadServlet (REST API)
+    │   ├── util/               # DataStore singleton, JsonFileStore, LLMService
+    │   ├── filter/             # SecurityHeadersFilter (XSS/clickjacking protection)
+    │   └── listener/           # AppContextListener (system initialization)
+    ├── src/test/java/          # JUnit 5 unit tests (162 tests passing)
+    ├── src/test/resources/     # Test data (JSON fixtures)
+    ├── WebContent/
+    │   ├── index.jsp           # Role-selection landing page
+    │   ├── ta.jsp              # TA Dashboard (profile, apply, my positions, messages)
+    │   ├── mo.jsp              # MO Portal (post, review, accept/reject, my TAs, messages)
+    │   ├── admin.jsp           # Admin Overview (workload, logs, user/applicant management)
+    │   └── WEB-INF/web.xml     # Servlet configuration
+    ├── data/                   # JSON persistence (created at runtime)
+    │   ├── users.json          # User accounts
+    │   ├── applicants.json     # TA applicant profiles
+    │   ├── positions.json      # Course/position listings
+    │   ├── applications.json   # Application records
+    │   ├── workloads.json      # TA workload hours
+    │   ├── system_logs.json    # File I/O activity log
+    │   ├── mo_ta_messages.json # MO↔TA message history
+    │   └── system_config.json  # System configuration & version info
+    └── cv_uploads/             # Uploaded CV files (PDF/DOC/DOCX)
 ```
 
-> **Note:** The web application is deployed as an exploded WAR under `webapps/SmartTA/` inside Tomcat. JSP pages and static assets sit at the root of that directory alongside `WEB-INF/`. Run `compile_smartta.bat` to recompile the Java sources from `src/main/java/` into `WEB-INF/classes/`.
-
-> The `SmartTA/` directory contains the fully functional Java Servlet/JSP application. See `SmartTA/README.md` for deployment instructions. The original `Prototype_group37.html` remains available as a standalone visual prototype.
+> **v3.0 Final Assessment:** The `SmartTA/` directory contains the fully functional Java Servlet/JSP application. Run `mvn test` in the `SmartTA/` directory to execute the automated test suite. See `SmartTA/` for deployment instructions. The original `Prototype_group37.html` remains available as the standalone visual prototype.
 
 ---
 
