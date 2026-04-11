@@ -1,6 +1,6 @@
 {
-  "appVersion": "2.0",
-  "buildDate": "2026-04-08",
+  "appVersion": "3.0",
+  "buildDate": "2026-04-10",
   "demoAccounts": [
     {"username": "admin", "password": "admin123", "role": "ADMIN", "displayName": "Administrator"},
     {"username": "mosmith", "password": "mo123", "role": "MO", "displayName": "Dr. J. Smith"},
@@ -8,17 +8,19 @@
     {"username": "limei", "password": "ta123", "role": "TA", "displayName": "Li Mei"}
   ],
   "versionHistory": [
+    {"version": "3.0", "date": "2026-04-10", "title": "Final Assessment & QA", "description": "MO: download TA CV, accept/reject TA, my profile; TA: My Positions, MO Messages channel; full data sync; automated unit test suite (JUnit 5, 162 tests passing)"},
     {"version": "2.0", "date": "2026-04-05", "title": "Mid-Term Assessment", "description": "JSON file persistence, REST API, AI scoring engine, system log viewer, Workload Monitor, MoSCoW traceability matrix"},
     {"version": "1.1", "date": "2026-03-29", "title": "Working Software v1", "description": "Role-based dashboards, static data, mock file-save feedback, form validation"},
     {"version": "1.0", "date": "2026-03-22", "title": "First Assessment", "description": "Product backlog, low-fidelity HTML prototype, brief report, stakeholder interviews, user stories"}
   ],
   "featureCoverage": [
     {"icon": "&#10003;", "text": "TA: profile, CV, apply, track"},
-    {"icon": "&#10003;", "text": "MO: post job, rank, accept/reject"},
+    {"icon": "&#10003;", "text": "MO: post job, rank, accept/reject, download CV"},
     {"icon": "&#10003;", "text": "Admin: workload, logs, file status"},
     {"icon": "&#10003;", "text": "AI: skill matching, gap analysis"},
     {"icon": "&#10003;", "text": "Persistence: JSON file I/O"},
-    {"icon": "&#10003;", "text": "Traceability matrix"}
+    {"icon": "&#10003;", "text": "Traceability matrix"},
+    {"icon": "&#10003;", "text": "Unit tests: 162 tests passing"}
   ],
   "fileStatusConfig": [
     {"filename": "positions.json", "displayName": "Positions", "category": "Academic Data"},

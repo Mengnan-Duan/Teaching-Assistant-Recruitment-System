@@ -76,6 +76,7 @@ public class SystemLog implements Serializable {
     public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 
     public String getOpIcon() {
+        if (operation == null) return "?";
         switch (operation) {
             case OP_READ: return "R";
             case OP_WRITE: return "W";

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MoTaMessage.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Smart-TA Unit Tests</a> &gt; <a href="index.source.html" class="el_package">com.bupt.smartta.model</a> &gt; <span class="el_source">MoTaMessage.java</span></div><h1>MoTaMessage.java</h1><pre class="source lang-java linenums">package com.bupt.smartta.model;
+
+import java.io.Serializable;
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * 一条 MO ↔ TA 站内留言（按 moUsername + taApplicantId 线索归档）。
+ */
+public class MoTaMessage implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private String id;
+    private String moUsername;
+    private String taApplicantId;
+    private String fromUsername;
+    private String fromDisplayName;
+    /** &quot;MO&quot; 或 &quot;TA&quot; */
+    private String fromRole;
+    private String toUsername;
+    private String body;
+    private String sentAt;
+    private boolean readByRecipient;
+
+<span class="fc" id="L25">    public MoTaMessage() {}</span>
+
+    public static MoTaMessage create(String moUsername, String taApplicantId,
+            String fromUsername, String fromDisplayName, String fromRole,
+            String toUsername, String body) {
+<span class="fc" id="L30">        MoTaMessage m = new MoTaMessage();</span>
+<span class="fc" id="L31">        m.id = UUID.randomUUID().toString();</span>
+<span class="fc" id="L32">        m.moUsername = moUsername;</span>
+<span class="fc" id="L33">        m.taApplicantId = taApplicantId;</span>
+<span class="fc" id="L34">        m.fromUsername = fromUsername;</span>
+<span class="fc bfc" id="L35" title="All 2 branches covered.">        m.fromDisplayName = fromDisplayName != null ? fromDisplayName : fromUsername;</span>
+<span class="fc" id="L36">        m.fromRole = fromRole;</span>
+<span class="fc" id="L37">        m.toUsername = toUsername;</span>
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        m.body = body != null ? body : &quot;&quot;;</span>
+<span class="fc" id="L39">        m.sentAt = Instant.now().toString();</span>
+<span class="fc" id="L40">        m.readByRecipient = false;</span>
+<span class="fc" id="L41">        return m;</span>
+    }
+
+<span class="fc" id="L44">    public String getId() { return id; }</span>
+<span class="fc" id="L45">    public void setId(String id) { this.id = id; }</span>
+<span class="fc" id="L46">    public String getMoUsername() { return moUsername; }</span>
+<span class="fc" id="L47">    public void setMoUsername(String moUsername) { this.moUsername = moUsername; }</span>
+<span class="fc" id="L48">    public String getTaApplicantId() { return taApplicantId; }</span>
+<span class="fc" id="L49">    public void setTaApplicantId(String taApplicantId) { this.taApplicantId = taApplicantId; }</span>
+<span class="fc" id="L50">    public String getFromUsername() { return fromUsername; }</span>
+<span class="fc" id="L51">    public void setFromUsername(String fromUsername) { this.fromUsername = fromUsername; }</span>
+<span class="fc" id="L52">    public String getFromDisplayName() { return fromDisplayName; }</span>
+<span class="fc" id="L53">    public void setFromDisplayName(String fromDisplayName) { this.fromDisplayName = fromDisplayName; }</span>
+<span class="fc" id="L54">    public String getFromRole() { return fromRole; }</span>
+<span class="fc" id="L55">    public void setFromRole(String fromRole) { this.fromRole = fromRole; }</span>
+<span class="fc" id="L56">    public String getToUsername() { return toUsername; }</span>
+<span class="fc" id="L57">    public void setToUsername(String toUsername) { this.toUsername = toUsername; }</span>
+<span class="fc" id="L58">    public String getBody() { return body; }</span>
+<span class="fc" id="L59">    public void setBody(String body) { this.body = body; }</span>
+<span class="fc" id="L60">    public String getSentAt() { return sentAt; }</span>
+<span class="fc" id="L61">    public void setSentAt(String sentAt) { this.sentAt = sentAt; }</span>
+<span class="fc" id="L62">    public boolean isReadByRecipient() { return readByRecipient; }</span>
+<span class="fc" id="L63">    public void setReadByRecipient(boolean readByRecipient) { this.readByRecipient = readByRecipient; }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

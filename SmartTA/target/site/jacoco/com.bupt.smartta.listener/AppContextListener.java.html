@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AppContextListener.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Smart-TA Unit Tests</a> &gt; <a href="index.source.html" class="el_package">com.bupt.smartta.listener</a> &gt; <span class="el_source">AppContextListener.java</span></div><h1>AppContextListener.java</h1><pre class="source lang-java linenums">package com.bupt.smartta.listener;
+
+import com.bupt.smartta.util.DataStore;
+import jakarta.servlet.ServletContextEvent;
+import jakarta.servlet.ServletContextListener;
+import jakarta.servlet.annotation.WebListener;
+
+/**
+ * 应用启动监听器。
+ * 当 Tomcat 启动 SmartTA 应用时，自动初始化 DataStore，加载/创建所有数据。
+ * 确保 Single Source of Truth（单一数据源）：后端 JSON 文件。
+ */
+@WebListener
+<span class="nc" id="L14">public class AppContextListener implements ServletContextListener {</span>
+
+    @Override
+    public void contextInitialized(ServletContextEvent sce) {
+<span class="nc" id="L18">        System.out.println(&quot;[SmartTA] AppContextListener: Initializing DataStore...&quot;);</span>
+        try {
+            // 触发 DataStore 单例初始化（线程安全）
+            // getInstance() 内部调用 loadAll()，会加载所有 JSON 并在空时自动 seed
+<span class="nc" id="L22">            DataStore ds = DataStore.getInstance();</span>
+<span class="nc" id="L23">            System.out.println(&quot;[SmartTA] AppContextListener: DataStore initialized successfully.&quot;);</span>
+<span class="nc" id="L24">            System.out.println(&quot;[SmartTA] AppContextListener: Positions=&quot; + ds.getPositions().size()</span>
+<span class="nc" id="L25">                    + &quot;, Applicants=&quot; + ds.getApplicants().size()</span>
+<span class="nc" id="L26">                    + &quot;, Applications=&quot; + ds.getApplications().size()</span>
+<span class="nc" id="L27">                    + &quot;, Users=&quot; + ds.getUsers().size()</span>
+<span class="nc bnc" id="L28" title="All 2 branches missed.">                    + &quot;, Config loaded=&quot; + (ds.getSystemConfig() != null));</span>
+<span class="nc" id="L29">        } catch (Exception e) {</span>
+<span class="nc" id="L30">            System.err.println(&quot;[SmartTA] AppContextListener: FAILED to initialize DataStore: &quot; + e.getMessage());</span>
+<span class="nc" id="L31">            e.printStackTrace();</span>
+<span class="nc" id="L32">        }</span>
+<span class="nc" id="L33">    }</span>
+
+    @Override
+    public void contextDestroyed(ServletContextEvent sce) {
+<span class="nc" id="L37">        System.out.println(&quot;[SmartTA] AppContextListener: Application shutting down.&quot;);</span>
+<span class="nc" id="L38">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

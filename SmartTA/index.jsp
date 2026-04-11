@@ -38,6 +38,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login · Smart-TA</title>
+    <link rel="icon" href="<%= request.getContextPath() %>/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="<%= request.getContextPath() %>/favicon.svg" type="image/svg+xml" />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/smartta-shell.css" />
     <style>
@@ -432,10 +434,11 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 </div>
 
 <script>
+var APP_CTX = "<%= request.getContextPath() %>";
 // Load system config (demo accounts, version) from backend on page load
 (async function() {
     try {
-        let res = await fetch("/SmartTA/api?action=config");
+        let res = await fetch(APP_CTX + "/api?action=config");
         if (res.ok) {
             let cfg = await res.json();
             // Version badge
@@ -560,7 +563,7 @@ async function doLogin() {
         params.append("username", username);
         params.append("password", password);
         params.append("role", role);
-        let res = await fetch("/SmartTA/auth/login", { method: "POST", body: params, headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+        let res = await fetch(APP_CTX + "/auth/login", { method: "POST", body: params, headers: { "Content-Type": "application/x-www-form-urlencoded" } });
         let text = await res.text();
         let json;
         try {
@@ -622,7 +625,7 @@ async function doRegister() {
         params.append("email", email);
         params.append("password", password);
         params.append("roles", roles.join(","));
-        let res = await fetch("/SmartTA/auth/register", {
+        let res = await fetch(APP_CTX + "/auth/register", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
             body: params,
