@@ -23,6 +23,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TA Dashboard · Smart-TA</title>
+    <link rel="icon" href="<%= request.getContextPath() %>/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="<%= request.getContextPath() %>/favicon.svg" type="image/svg+xml" />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/smartta-shell.css" />
     <style>
@@ -260,6 +262,7 @@ textarea { resize:vertical; min-height:80px; }
                 </div>
             </div>
         </div>
+        <span id="taUnreadBadge" class="pill-count" style="display:none;background:var(--accent-soft);color:var(--accent)" title="Unread">0</span>
         <span class="version-tag">v2.0</span>
     </div>
 </div>
@@ -271,10 +274,12 @@ textarea { resize:vertical; min-height:80px; }
     </div>
 
     <div>
-        <div style="display:flex;gap:6px;margin-bottom:20px;">
+        <div style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;">
             <button class="btn btn-primary" id="tab-pos" onclick="switchTab('positions')">Available Positions</button>
             <button class="btn btn-outline" id="tab-app" onclick="switchTab('applications')">My Applications</button>
             <button class="btn btn-outline" id="tab-profile" onclick="switchTab('profile')">My Profile</button>
+            <button class="btn btn-outline" id="tab-mypos" onclick="switchTab('mypositions')">My Positions</button>
+            <button class="btn btn-outline" id="tab-momo" onclick="switchTab('momo')">MO Messages</button>
         </div>
 
         <div id="content-positions">
@@ -326,6 +331,41 @@ textarea { resize:vertical; min-height:80px; }
                 <p style="font-size:0.78rem;color:var(--muted);margin-top:8px">Accepted formats: PDF, DOC, DOCX</p>
             </div>
         </div>
+
+        <!-- MY POSITIONS: TA 已接受的岗位（绿色） -->
+        <div id="content-mypositions" style="display:none">
+            <div class="card-section">
+                <div class="section-header">
+                    <h2>My Positions</h2>
+                    <span class="ai-inline-badge">Accepted positions</span>
+                </div>
+                <p style="font-size:0.78rem;color:var(--muted);margin-bottom:14px;">Positions you have been accepted as a TA for. Message your MO here.</p>
+                <div id="myPositionsList"><div style="color:var(--muted);font-size:0.85rem">Loading…</div></div>
+            </div>
+        </div>
+
+        <div id="content-momo" style="display:none">
+            <div class="card-section">
+                <div class="section-header">
+                    <h2>MO Messages</h2>
+                    <span class="ai-inline-badge">Your supervisors</span>
+                </div>
+                <p style="font-size:0.78rem;color:var(--muted);margin-bottom:12px;">Messages from MOs related to your accepted or pending positions.</p>
+                <div id="taMoThreadList"><div style="color:var(--muted);font-size:0.85rem">Loading…</div></div>
+            </div>
+            <div class="card-section" id="taMoMsgCard" style="display:none">
+                <div class="section-header">
+                    <h2 id="taMoMsgTitle">Conversation</h2>
+                </div>
+                <div id="taMoMsgThread" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;background:#fafaf8;font-size:0.82rem;"></div>
+                <label style="font-size:0.78rem;font-weight:700;color:var(--muted)">Reply</label>
+                <textarea id="taMoMsgBody" style="width:100%;min-height:72px;margin-top:6px" placeholder="Write to your module organiser…"></textarea>
+                <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">
+                    <button type="button" class="btn btn-outline" onclick="closeTaMoMsgCard()">Close</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="sendTaMoMessage()">Send</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div>
@@ -370,12 +410,15 @@ textarea { resize:vertical; min-height:80px; }
 <div id="toastContainer"></div>
 
 <script>
+var APP_CTX = "<%= request.getContextPath() %>";
 let state = {
     csrfToken: null,
     positions: [], applications: [], applicant: null,
     session: { username: null, displayName: null, email: null, currentRole: null, roles: [] },
     applicantId: null,
-    skillSuggestions: []
+    skillSuggestions: [],
+    taMoThreads: [],
+    selectedMoUsername: null
 };
 
 function syntheticApplicant() {
@@ -411,6 +454,8 @@ function profileEmailMerged(a) {
     await Promise.all([loadPositions(), loadApplications(), loadApplicant(), loadSystemConfig()]);
     renderSkillsGap();
     renderStats();
+    refreshTaUnread();
+    setInterval(refreshTaUnread, 25000);
 })();
 
 // Load system config (skill suggestions, data traceability) from backend
@@ -568,6 +613,8 @@ async function loadApplications() {
         state.applications = json.applications || [];
         renderApplications();
         renderStats();
+        // Accepted 申请增加后，My Positions 应同步刷新
+        loadMyPositions();
     } catch(e) { console.error(e); }
 }
 
@@ -597,7 +644,8 @@ function renderPositions() {
     let container = document.getElementById("positionsList");
     let sort = document.getElementById("sortSelect").value;
     let apps = state.applications;
-    let positions = state.positions.filter(p => p.isOpen);
+    // 修复4: 只显示尚未申请（或申请被拒绝）的开放职位
+    let positions = state.positions.filter(p => p.isOpen && !apps.some(a => a.positionCode === p.code));
 
     if (sort === "score") positions.sort((a,b) => getMatchScore(b, state.applicant) - getMatchScore(a, state.applicant));
     else if (sort === "deadline") positions.sort((a,b) => a.deadline.localeCompare(b.deadline));
@@ -618,13 +666,15 @@ function renderPositions() {
             let has = sk.includes(s);
             return `<span class="skill-tag${has?' highlight':''}">${s}${!has?' (missing)':''}</span>`;
         }).join("");
-        let alreadyApplied = apps.some(a => a.positionCode === p.code);
         let matchDetail = getScoreDetail(p, state.applicant);
+        // 修复3: 课程名和课程编号同时清晰显示（code为主，name为副）
         return `<div class="pos-card">
             <div class="pos-card-header">
-                <div><strong>${p.code}</strong> — ${p.name}</div>
-                <div class="match-bar" style="width:100px"><div class="fill ${fillClass}" style="width:${myScore}%"></div></div>
-                <strong style="color:${myScore>=75?'var(--success)':myScore>=55?'#b8860b':'var(--accent)'}">${myScore}%</strong>
+                <div><strong style="color:var(--primary-dark);font-size:1rem">${p.code}</strong> <span style="color:var(--muted)">—</span> <span style="font-size:0.95rem">${p.name || '—'}</span></div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div class="match-bar" style="width:100px"><div class="fill ${fillClass}" style="width:${myScore}%"></div></div>
+                    <strong style="color:${myScore>=75?'var(--success)':myScore>=55?'#b8860b':'var(--accent)'}">${myScore}%</strong>
+                </div>
             </div>
             <div style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">Posted by ${p.postedBy}</div>
             <div>${skillTags}</div>
@@ -635,8 +685,8 @@ function renderPositions() {
             </div>
             <div style="font-size:0.75rem;color:var(--muted);margin-bottom:8px">${matchDetail}</div>
             <div class="pos-card-actions">
-                <button class="btn btn-primary btn-sm" onclick="applyPosition('${p.code}','${p.name}')" ${alreadyApplied?'disabled':''}>
-                    ${alreadyApplied?'Already Applied':'Apply Now'}
+                <button class="btn btn-primary btn-sm" onclick="applyPosition('${p.code}','${p.name}')">
+                    Apply Now
                 </button>
             </div>
         </div>`;
@@ -657,7 +707,7 @@ function renderApplications() {
         return `<div class="app-card" onclick="openAppDetail('${a.id}','${a.positionCode}','${a.status}')">
             <div style="display:flex;justify-content:space-between;align-items:start;">
                 <div>
-                    <strong>${a.positionCode}</strong> — ${a.positionName}
+                    <strong style="color:var(--primary-dark)">${a.positionCode}</strong> <span style="color:var(--muted)">—</span> <span style="font-size:0.9rem">${a.positionName || '—'}</span>
                     <span class="status-chip ${statusClass}" style="margin-left:8px">${a.status}</span>
                     <div style="font-size:0.78rem;color:var(--muted);margin-top:4px">Applied: ${a.appliedAt}</div>
                 </div>
@@ -745,16 +795,17 @@ function getScoreDetail(pos, applicant) {
 }
 
 function buildTimeline(status) {
-    let steps = ["Submitted","Under Review","Interview","Decision"];
+    // 简化为三步：Submitted → Under Review → Decision（Accepted/Rejected）
+    let steps = ["Submitted", "Under Review", "Decision"];
     let current = steps.indexOf(status);
     if (status === "Accepted") current = steps.length - 1;
-    if (status === "Rejected") current = 2;
+    if (status === "Rejected") current = steps.length - 1;
     let html = steps.map((step, i) => {
         let cls = "";
-        if (status === "Rejected" && i === 2) cls = "rejected";
+        if (status === "Rejected" && i === steps.length - 1) cls = "rejected";
         else if (i < current) cls = "done";
         else if (i === current) cls = "active";
-        let dot = i < current ? "&#10003;" : (status === "Rejected" && i === 2 ? "&times;" : (i+1));
+        let dot = i < current ? "&#10003;" : (status === "Rejected" && i === steps.length - 1 ? "&times;" : (i+1));
         return `<div class="timeline-step ${cls}"><div class="step-dot">${dot}</div><div class="step-label">${step}</div></div>${i < steps.length-1 ? '<div class="timeline-connector' + (i < current ? ' done' : '') + '"></div>' : ''}`;
     }).join("");
     return html;
@@ -895,7 +946,7 @@ function handleCVUpload(input) {
     if (!file) return;
     if (!state.applicantId) { showToast("Please set up your profile first", "error"); return; }
 
-    // 文件类型校验
+    // File type validation
     let allowedTypes = ['.pdf', '.doc', '.docx'];
     let fileName = file.name.toLowerCase();
     let ext = fileName.lastIndexOf('.') >= 0 ? fileName.substring(fileName.lastIndexOf('.')) : '';
@@ -903,7 +954,7 @@ function handleCVUpload(input) {
         showToast("Invalid file type. Accepted: PDF, DOC, DOCX", "error");
         return;
     }
-    // 文件大小校验（5MB）
+    // File size validation (5MB)
     if (file.size > 5 * 1024 * 1024) {
         showToast("File too large. Maximum size: 5MB", "error");
         return;
@@ -919,7 +970,7 @@ function handleCVUpload(input) {
     btn.disabled = true;
     btn.textContent = "Uploading...";
 
-    fetch("/SmartTA/upload", {
+    fetch(APP_CTX + "/upload", {
         method: "POST",
         body: fd,
         credentials: "same-origin"
@@ -1023,7 +1074,7 @@ async function openAppDetail(appId, code, status) {
            </div>`;
     let html = `
         <div style="margin-bottom:16px">
-            <strong>Module:</strong> ${app.positionCode} &mdash; ${app.positionName}<br/>
+            <strong>Module:</strong> <strong style="color:var(--primary-dark)">${app.positionCode}</strong> &mdash; ${app.positionName || '—'}<br/>
             <strong>Status:</strong> ${app.status}<br/>
             <strong>Applied:</strong> ${app.appliedAt}
         </div>
@@ -1037,9 +1088,171 @@ function switchTab(tab) {
     document.getElementById("content-positions").style.display = tab === "positions" ? "block" : "none";
     document.getElementById("content-applications").style.display = tab === "applications" ? "block" : "none";
     document.getElementById("content-profile").style.display = tab === "profile" ? "block" : "none";
+    document.getElementById("content-mypositions").style.display = tab === "mypositions" ? "block" : "none";
+    document.getElementById("content-momo").style.display = tab === "momo" ? "block" : "none";
     document.getElementById("tab-pos").className = "btn " + (tab === "positions" ? "btn-primary" : "btn-outline");
     document.getElementById("tab-app").className = "btn " + (tab === "applications" ? "btn-primary" : "btn-outline");
     document.getElementById("tab-profile").className = "btn " + (tab === "profile" ? "btn-primary" : "btn-outline");
+    document.getElementById("tab-mypos").className = "btn " + (tab === "mypositions" ? "btn-primary" : "btn-outline");
+    document.getElementById("tab-momo").className = "btn " + (tab === "momo" ? "btn-primary" : "btn-outline");
+    if (tab === "momo") loadTaMoThreads();
+    if (tab === "mypositions") loadMyPositions();
+}
+
+async function refreshTaUnread() {
+    try {
+        let res = await fetch("api/messageUnread", { credentials: "same-origin" });
+        if (!res.ok) return;
+        let j = await res.json();
+        let n = j.unread || 0;
+        let el = document.getElementById("taUnreadBadge");
+        if (!el) return;
+        if (n > 0) { el.style.display = "inline-block"; el.textContent = n + " unread"; }
+        else { el.style.display = "none"; }
+    } catch (e) {}
+}
+
+function escTa(s) {
+    if (!s) return "";
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function escTaAttr(s) {
+    if (!s) return "";
+    return String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+}
+
+async function loadMyPositions() {
+    let el = document.getElementById("myPositionsList");
+    try {
+        let res = await fetch("api/myPositions", { credentials: "same-origin" });
+        if (!res.ok) { el.innerHTML = "<span style=color:var(--accent)>Could not load.</span>"; return; }
+        let j = await res.json();
+        let positions = j.myPositions || [];
+        if (!positions.length) {
+            el.innerHTML = "<p style=color:var(--muted)>No accepted positions yet. When an MO accepts your application, the position will appear here.</p>";
+            return;
+        }
+        el.innerHTML = positions.map(function(row) {
+            let app = row.application || {};
+            let pos = row.position || {};
+            let moName = row.moDisplayName || row.moUsername || "—";
+            let hours = pos.hoursPerWeek || 0;
+            let deadline = pos.deadline || "—";
+            let moU = row.moUsername || "";
+            let descHtml = pos.description ? ("<p style=\"font-size:0.8rem;color:var(--muted);margin-bottom:10px\">" + escTa(pos.description) + "</p>") : "";
+            let msgBtn = moU ? ("<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"openTaMoThread('" + escTaAttr(moU) + "','" + escTaAttr(moName) + "')\">Message MO</button>") : "";
+            return "<div class=\"pos-card\" style=\"border-left:4px solid var(--success)\">" +
+                "<div class=\"pos-card-header\">" +
+                "<div><strong style=\"color:var(--success);font-size:1rem\">" + escTa(pos.code || "") + "</strong>" +
+                "<span style=\"color:var(--muted);margin:0 6px\">—</span><span style=\"font-size:0.95rem\">" + escTa(pos.name || "") + "</span></div>" +
+                "<span class=\"status-chip status-accepted\">Accepted</span></div>" +
+                "<div style=\"display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:12px 0\">" +
+                "<div><span style=\"font-size:0.75rem;color:var(--muted)\">Hours/Week</span><br/><strong>" + hours + "h</strong></div>" +
+                "<div><span style=\"font-size:0.75rem;color:var(--muted)\">Deadline</span><br/><strong>" + escTa(deadline) + "</strong></div>" +
+                "<div><span style=\"font-size:0.75rem;color:var(--muted)\">Module Organiser</span><br/><strong>" + escTa(moName) + "</strong></div>" +
+                "</div>" +
+                descHtml +
+                "<div class=\"pos-card-actions\">" + msgBtn + "</div></div>";
+        }).join("");
+    } catch (e) {
+        el.innerHTML = "<span style=color:var(--accent)>Failed to load.</span>";
+    }
+}
+
+function openTaPositionDetail(code) {
+    let pos = state.positions.find(function(p) { return p.code === code; });
+    if (!pos) return;
+    let skillTags = (pos.skillsList||[]).map(function(s) { return "<span class=\"skill-tag\">" + escTa(s) + "</span>"; }).join("");
+    openModal("<strong style=\"color:var(--primary-dark)\">" + escTa(pos.code || "") + "</strong> <span style=\"color:var(--muted)\">—</span> " + escTa(pos.name || ""),
+        "<div><strong>Hours/Week:</strong> " + pos.hoursPerWeek + "h</div>" +
+        "<div><strong>Slots:</strong> " + pos.remainingSlots + " / " + pos.totalSlots + "</div>" +
+        "<div><strong>Deadline:</strong> " + escTa(pos.deadline) + "</div>" +
+        "<div><strong>Posted by:</strong> " + escTa(pos.postedBy) + "</div>" +
+        (pos.description ? ("<div style=\"margin-top:10px\"><strong>Description:</strong><br/>" + escTa(pos.description) + "</div>") : "") +
+        "<div style=\"margin-top:10px\"><strong>Required Skills:</strong><br/>" + skillTags + "</div>");
+}
+
+async function loadTaMoThreads() {
+    let el = document.getElementById("taMoThreadList");
+    try {
+        let res = await fetch("api/taMoThreads", { credentials: "same-origin" });
+        let j = await res.json();
+        if (!j.success) {
+            el.innerHTML = "<p style=color:var(--muted)>" + escTa(j.message || "Could not load") + "</p>";
+            return;
+        }
+        state.taMoThreads = j.threads || [];
+        if (!state.taMoThreads.length) {
+            el.innerHTML = "<p style=color:var(--muted)>No accepted positions yet — once an MO accepts you, their inbox appears here.</p>";
+            return;
+        }
+        el.innerHTML = state.taMoThreads.map(function(t) {
+            let u = t.unread ? (" <span style=color:var(--accent);font-weight:700>(" + t.unread + " new)</span>") : "";
+            return "<div class=\"pos-card\" style=cursor:pointer onclick=\"openTaMoThread('" + escTaAttr(t.moUsername) + "','" + escTaAttr(t.moDisplayName || t.moUsername) + "')\">" +
+                "<strong>" + escTa(t.moDisplayName || t.moUsername) + "</strong>" + u +
+                "<div style=font-size:0.78rem;color:var(--muted);margin-top:6px>@" + escTa(t.moUsername) + "</div></div>";
+        }).join("");
+    } catch (e) {
+        el.innerHTML = "<span style=color:var(--accent)>Failed to load.</span>";
+    }
+}
+
+async function openTaMoThread(moUsername, moDisplayName) {
+    state.selectedMoUsername = moUsername;
+    document.getElementById("taMoMsgCard").style.display = "block";
+    document.getElementById("taMoMsgTitle").textContent = "Conversation · " + moDisplayName;
+    document.getElementById("taMoMsgBody").value = "";
+    await loadTaMoThreadView();
+    let p = new URLSearchParams();
+    p.append("_csrf", state.csrfToken || sessionStorage.getItem("csrfToken") || "");
+    p.append("moUsername", moUsername);
+    await fetch("api/markMoTaRead", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: p, credentials: "same-origin" });
+    refreshTaUnread();
+    loadTaMoThreads();
+}
+
+function closeTaMoMsgCard() {
+    document.getElementById("taMoMsgCard").style.display = "none";
+    state.selectedMoUsername = null;
+}
+
+async function loadTaMoThreadView() {
+    let mu = state.selectedMoUsername;
+    let box = document.getElementById("taMoMsgThread");
+    if (!mu || !box) return;
+    try {
+        let res = await fetch("api/taMoMessages?moUsername=" + encodeURIComponent(mu), { credentials: "same-origin" });
+        let j = await res.json();
+        if (!j.success) { box.innerHTML = "<span style=color:var(--accent)>" + escTa(j.message || "Error") + "</span>"; return; }
+        let msgs = j.messages || [];
+        if (!msgs.length) box.innerHTML = "<span style=color:var(--muted)>No messages yet.</span>";
+        else box.innerHTML = msgs.map(function(m) {
+            let who = m.fromDisplayName || m.fromUsername;
+            let t = m.sentAt || "";
+            let bubble = m.fromRole === "MO" ? "background:#e3f2fd;border-radius:8px;padding:8px 10px;margin:6px 20px 6px 0;" : "background:#e6f5f3;border-radius:8px;padding:8px 10px;margin:6px 0 6px 20px;";
+            return "<div style=\"" + bubble + "\"><div style=font-size:0.72rem;color:var(--muted)><strong>" + escTa(who) + "</strong> · " + escTa(t) + "</div><div style=margin-top:4px;white-space:pre-wrap>" + escTa(m.body) + "</div></div>";
+        }).join("");
+        box.scrollTop = box.scrollHeight;
+    } catch (e) { box.innerHTML = "Error"; }
+}
+
+async function sendTaMoMessage() {
+    let mu = state.selectedMoUsername;
+    let body = document.getElementById("taMoMsgBody").value.trim();
+    if (!mu || !body) return;
+    let p = new URLSearchParams();
+    p.append("_csrf", state.csrfToken || sessionStorage.getItem("csrfToken") || "");
+    p.append("moUsername", mu);
+    p.append("body", body);
+    try {
+        let res = await fetch("api/moTaMessage", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: p, credentials: "same-origin" });
+        let j = await res.json();
+        if (j.success) {
+            document.getElementById("taMoMsgBody").value = "";
+            await loadTaMoThreadView();
+            showToast("Sent", "success");
+        } else showToast(j.message || "Failed", "error");
+    } catch (e) { showToast("Failed", "error"); }
 }
 
 function openModal(title, body) {

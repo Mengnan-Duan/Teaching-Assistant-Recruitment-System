@@ -16,6 +16,8 @@ public class Position implements Serializable {
     private String deadline;
     private String description;
     private String postedBy;
+    /** 发布该职位的 MO 登录名（由系统写入，用于 TA 精确关联负责老师） */
+    private String postedByUsername;
     private String postedAt;
     private String status;
 
@@ -57,6 +59,8 @@ public class Position implements Serializable {
     public void setDescription(String description) { this.description = description; }
     public String getPostedBy() { return postedBy; }
     public void setPostedBy(String postedBy) { this.postedBy = postedBy; }
+    public String getPostedByUsername() { return postedByUsername; }
+    public void setPostedByUsername(String postedByUsername) { this.postedByUsername = postedByUsername; }
     public String getPostedAt() { return postedAt; }
     public void setPostedAt(String postedAt) { this.postedAt = postedAt; }
     public String getStatus() { return status; }

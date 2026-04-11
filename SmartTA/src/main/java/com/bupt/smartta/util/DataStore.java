@@ -18,6 +18,7 @@ public class DataStore {
     private static final String LOGS        = "system_logs";
     private static final String WORKLOADS   = "workloads";
     private static final String USERS       = "users";
+    private static final String MOTA_MESSAGES = "mota_messages";
 
     private List<Position> positions;
     private List<TAPplicant> applicants;
@@ -25,6 +26,7 @@ public class DataStore {
     private List<SystemLog> logs;
     private Map<String, Integer> workloadHours;
     private List<User> users;
+    private List<MoTaMessage> motaMessages;
 
     /** 申请者 ID 原子计数器，确保并发注册时 ID 不冲突 */
     private AtomicInteger applicantIdCounter;
@@ -61,6 +63,7 @@ public class DataStore {
         logs         = store.load(LOGS,         new TypeReference<List<SystemLog>>(){});
         workloadHours = store.loadObject(WORKLOADS, HashMap.class);
         users        = store.load(USERS,        new TypeReference<List<User>>(){});
+        motaMessages = store.load(MOTA_MESSAGES, new TypeReference<List<MoTaMessage>>(){});
 
         if (workloadHours == null) workloadHours = new HashMap<>();
         if (positions    == null) positions    = new ArrayList<>();
@@ -68,6 +71,7 @@ public class DataStore {
         if (applications == null) applications = new ArrayList<>();
         if (logs         == null) logs         = new ArrayList<>();
         if (users        == null) users        = new ArrayList<>();
+        if (motaMessages == null) motaMessages = new ArrayList<>();
 
         initApplicantIdCounter();
         rebuildApplicationIndexes();
@@ -114,8 +118,10 @@ public class DataStore {
 
     private void seedPositions() {
         positions = new ArrayList<>();
-        positions.add(new Position("EBU6304","Software Engineering",
-            Arrays.asList("Java","Agile","Git"), 8, 2, "2026-04-15", "Dr. J. Smith"));
+        Position p1 = new Position("EBU6304","Software Engineering",
+            Arrays.asList("Java","Agile","Git"), 8, 2, "2026-04-15", "Dr. J. Smith");
+        p1.setPostedByUsername("mosmith");
+        positions.add(p1);
         positions.add(new Position("EBU5476","Database Systems",
             Arrays.asList("SQL","Python","Linux"), 6, 3, "2026-04-20", "Dr. A. Lee"));
         positions.add(new Position("EBU4010","Computer Networks",
@@ -558,6 +564,34 @@ public class DataStore {
 
     public List<User> getUsers() { return new ArrayList<>(users); }
 
+    /**
+     * 从内存列表与持久化存储中删除用户（不可对 {@link #getUsers()} 的副本调用 remove）。
+     */
+    public boolean removeUserByUsername(String username) {
+        if (username == null || username.trim().isEmpty()) return false;
+        synchronized (initLock) {
+            int idx = -1;
+            User found = null;
+            for (int i = 0; i < users.size(); i++) {
+                User u = users.get(i);
+                if (u != null && u.getUsername() != null
+                        && u.getUsername().equalsIgnoreCase(username.trim())) {
+                    idx = i;
+                    found = u;
+                    break;
+                }
+            }
+            if (idx < 0 || found == null) return false;
+            users.remove(idx);
+            if (!saveUsersQuietly()) {
+                users.add(idx, found);
+                return false;
+            }
+            addLog(SystemLog.OP_WRITE, USERS + ".json", SystemLog.STATUS_OK);
+            return true;
+        }
+    }
+
     public User getUserByUsername(String username) {
         if (username == null) return null;
         return users.stream()
@@ -617,6 +651,77 @@ public class DataStore {
     }
 
     public JsonFileStore getStore() { return store; }
+
+    // ---- MO ↔ TA 留言 ----
+
+    public synchronized void addMoTaMessage(MoTaMessage m) {
+        if (m == null) return;
+        motaMessages.add(m);
+        saveMoTaMessagesQuietly();
+        addLog(SystemLog.OP_WRITE, MOTA_MESSAGES + ".json", SystemLog.STATUS_OK);
+    }
+
+    public List<MoTaMessage> getMoTaMessagesSnapshot() {
+        return new ArrayList<>(motaMessages);
+    }
+
+    /**
+     * 将某线程下收件人为 readerUsername 的留言标为已读。
+     */
+    public synchronized void markMoTaThreadRead(String moUsername, String taApplicantId, String readerUsername) {
+        if (moUsername == null || taApplicantId == null || readerUsername == null) return;
+        boolean changed = false;
+        for (MoTaMessage msg : motaMessages) {
+            if (msg == null) continue;
+            if (!moUsername.equalsIgnoreCase(msg.getMoUsername())) continue;
+            if (!taApplicantId.equalsIgnoreCase(msg.getTaApplicantId())) continue;
+            if (readerUsername.equalsIgnoreCase(msg.getToUsername()) && !msg.isReadByRecipient()) {
+                msg.setReadByRecipient(true);
+                changed = true;
+            }
+        }
+        if (changed) saveMoTaMessagesQuietly();
+    }
+
+    public int countUnreadMoTaForUser(String username) {
+        if (username == null) return 0;
+        int n = 0;
+        for (MoTaMessage msg : motaMessages) {
+            if (msg != null && username.equalsIgnoreCase(msg.getToUsername()) && !msg.isReadByRecipient()) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private void saveMoTaMessagesQuietly() {
+        try {
+            store.save(MOTA_MESSAGES, motaMessages);
+        } catch (IOException e) {
+            System.err.println("[DataStore] Failed to save mota_messages: " + e.getMessage());
+        }
+    }
+
+    /** 按 applicantId 查找已绑定该档案的 TA 用户（若有） */
+    public User findUserByApplicantId(String applicantId) {
+        if (applicantId == null) return null;
+        for (User u : users) {
+            if (u != null && applicantId.equalsIgnoreCase(u.getApplicantId())) return u;
+        }
+        return null;
+    }
+
+    /** 显示名与 postedBy 一致的首个 MO 账号（旧数据无 postedByUsername 时的回退） */
+    public User findMoUserByPostedByLabel(String postedBy) {
+        if (postedBy == null || postedBy.isEmpty()) return null;
+        String t = postedBy.trim();
+        for (User u : users) {
+            if (u == null || !u.hasRole("MO")) continue;
+            String dn = u.getDisplayName();
+            if (dn != null && dn.trim().equalsIgnoreCase(t)) return u;
+        }
+        return null;
+    }
 
     // ============================================================
     // SystemConfig 懒加载（只读，不需要频繁刷新）

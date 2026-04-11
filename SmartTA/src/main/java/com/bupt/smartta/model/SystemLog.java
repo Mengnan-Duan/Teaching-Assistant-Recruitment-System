@@ -45,6 +45,7 @@ public class SystemLog implements Serializable {
     public void setDetail(String detail) { this.detail = detail; }
 
     public String getOpIcon() {
+        if (operation == null) return "?";
         switch (operation) {
             case OP_READ: return "R";
             case OP_WRITE: return "W";

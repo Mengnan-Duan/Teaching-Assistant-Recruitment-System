@@ -1,0 +1,574 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LLMService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Smart-TA Unit Tests</a> &gt; <a href="index.source.html" class="el_package">com.bupt.smartta.util</a> &gt; <span class="el_source">LLMService.java</span></div><h1>LLMService.java</h1><pre class="source lang-java linenums">package com.bupt.smartta.util;
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Connects to DeepSeek API to generate match analysis for TA applicants.
+ * Reads API key from the application's .env file.
+ */
+public class LLMService {
+
+    private static final String DEEPSEEK_BASE_URL =
+        &quot;https://api.deepseek.com/chat/completions&quot;;
+    private static final String DEEPSEEK_MODEL = &quot;deepseek-chat&quot;;
+
+    private static volatile LLMService instance;
+    private static volatile String cachedApiKey;
+
+<span class="nc" id="L24">    private final Map&lt;String, String&gt; cache = new ConcurrentHashMap&lt;&gt;();</span>
+
+<span class="nc" id="L26">    private LLMService() {}</span>
+
+    public static LLMService getInstance() {
+<span class="nc bnc" id="L29" title="All 2 branches missed.">        if (instance == null) {</span>
+<span class="nc" id="L30">            synchronized (LLMService.class) {</span>
+<span class="nc bnc" id="L31" title="All 2 branches missed.">                if (instance == null) instance = new LLMService();</span>
+<span class="nc" id="L32">            }</span>
+        }
+<span class="nc" id="L34">        return instance;</span>
+    }
+
+    /**
+     * Loads the DeepSeek API key from the application's .env file.
+     * Looks for .env in the same directory as SmartTA.war is expanded,
+     * then falls back to the catalina.base system property, then CLASSPATH.
+     */
+    private String loadApiKey() {
+<span class="nc bnc" id="L43" title="All 2 branches missed.">        if (cachedApiKey != null) return cachedApiKey;</span>
+
+        // Try environment variable first (works on most platforms / IDE runners)
+<span class="nc" id="L46">        String envKey = System.getenv(&quot;DEEPSEEK_API_KEY&quot;);</span>
+<span class="nc bnc" id="L47" title="All 2 branches missed.">        if (isNonEmpty(envKey)) {</span>
+<span class="nc" id="L48">            cachedApiKey = envKey.trim();</span>
+<span class="nc" id="L49">            return cachedApiKey;</span>
+        }
+
+        // Try catalina.base (Tomcat's base directory)
+<span class="nc" id="L53">        String catalinaBase = System.getProperty(&quot;catalina.base&quot;);</span>
+<span class="nc" id="L54">        String[] searchPaths = {</span>
+<span class="nc bnc" id="L55" title="All 2 branches missed.">            catalinaBase != null ? catalinaBase + &quot;/webapps/SmartTA/.env&quot; : null,</span>
+<span class="nc" id="L56">            System.getProperty(&quot;user.dir&quot;) + &quot;/.env&quot;,</span>
+            &quot;D:/Tomcat/apache-tomcat-10.1.48/webapps/SmartTA/.env&quot;,
+        };
+
+<span class="nc bnc" id="L60" title="All 2 branches missed.">        for (String path : searchPaths) {</span>
+<span class="nc bnc" id="L61" title="All 2 branches missed.">            if (path == null) continue;</span>
+<span class="nc" id="L62">            try (BufferedReader reader = new BufferedReader(</span>
+                    new InputStreamReader(new FileInputStream(path), StandardCharsets.UTF_8))) {
+                String line;
+<span class="nc bnc" id="L65" title="All 2 branches missed.">                while ((line = reader.readLine()) != null) {</span>
+<span class="nc" id="L66">                    line = line.trim();</span>
+<span class="nc bnc" id="L67" title="All 4 branches missed.">                    if (line.isEmpty() || line.startsWith(&quot;#&quot;)) continue;</span>
+<span class="nc" id="L68">                    int eq = line.indexOf('=');</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">                    if (eq &gt; 0) {</span>
+<span class="nc" id="L70">                        String key = line.substring(0, eq).trim();</span>
+<span class="nc" id="L71">                        String val = line.substring(eq + 1).trim();</span>
+<span class="nc bnc" id="L72" title="All 4 branches missed.">                        if (&quot;DEEPSEEK_API_KEY&quot;.equals(key) &amp;&amp; isNonEmpty(val)) {</span>
+<span class="nc" id="L73">                            cachedApiKey = val;</span>
+<span class="nc" id="L74">                            return cachedApiKey;</span>
+                        }
+                    }
+<span class="nc" id="L77">                }</span>
+<span class="nc" id="L78">            } catch (IOException ignored) {}</span>
+        }
+
+<span class="nc" id="L81">        return null;</span>
+    }
+
+    /**
+     * Generates a human-readable match analysis using DeepSeek LLM.
+     * The result is cached by applicant+position so repeated calls are fast.
+     *
+     * @return a Chinese paragraph analysing why this applicant matches the position;
+     *         falls back to a template string if the API call fails or the key is missing
+     */
+    public String generateMatchAnalysis(
+            String applicantName, String applicantSkills,
+            double gpa, int hoursAvailable,
+            String positionName, String requiredSkills,
+            int positionHours, int skillScore, int gpaScore, int availScore, int totalScore) {
+
+<span class="nc" id="L97">        String cacheKey = String.format(&quot;%s|%s|%s|%d&quot;, applicantName, requiredSkills, positionName, totalScore);</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if (cache.containsKey(cacheKey)) return cache.get(cacheKey);</span>
+
+<span class="nc" id="L100">        String apiKey = loadApiKey();</span>
+<span class="nc bnc" id="L101" title="All 4 branches missed.">        if (apiKey == null || apiKey.isEmpty()) {</span>
+<span class="nc" id="L102">            String fallback = buildFallbackExplanation(applicantName, positionName,</span>
+                    skillScore, gpaScore, availScore, totalScore);
+<span class="nc" id="L104">            cache.put(cacheKey, fallback);</span>
+<span class="nc" id="L105">            return fallback;</span>
+        }
+
+        try {
+<span class="nc" id="L109">            String analysis = callDeepSeek(apiKey, applicantName, applicantSkills,</span>
+                    gpa, hoursAvailable, positionName, requiredSkills,
+                    positionHours, skillScore, gpaScore, availScore, totalScore);
+<span class="nc" id="L112">            cache.put(cacheKey, analysis);</span>
+<span class="nc" id="L113">            return analysis;</span>
+<span class="nc" id="L114">        } catch (Exception e) {</span>
+<span class="nc" id="L115">            String fallback = buildFallbackExplanation(applicantName, positionName,</span>
+                    skillScore, gpaScore, availScore, totalScore);
+<span class="nc" id="L117">            cache.put(cacheKey, fallback);</span>
+<span class="nc" id="L118">            return fallback;</span>
+        }
+    }
+
+    private String callDeepSeek(String apiKey,
+            String applicantName, String applicantSkills,
+            double gpa, int hoursAvailable,
+            String positionName, String requiredSkills,
+            int positionHours, int skillScore, int gpaScore, int availScore, int totalScore)
+            throws IOException {
+
+<span class="nc" id="L129">        String prompt = buildPrompt(applicantName, applicantSkills, gpa, hoursAvailable,</span>
+                positionName, requiredSkills, positionHours,
+                skillScore, gpaScore, availScore, totalScore);
+
+<span class="nc" id="L133">        String jsonBody = String.format(&quot;&quot;&quot;</span>
+            {
+              &quot;model&quot;: &quot;%s&quot;,
+              &quot;messages&quot;: [
+                {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: %s}
+              ],
+              &quot;max_tokens&quot;: 400,
+              &quot;temperature&quot;: 0.3
+            }
+<span class="nc" id="L142">            &quot;&quot;&quot;, DEEPSEEK_MODEL, escapeJson(prompt));</span>
+
+<span class="nc" id="L144">        HttpURLConnection conn = (HttpURLConnection) new URL(DEEPSEEK_BASE_URL).openConnection();</span>
+        try {
+<span class="nc" id="L146">            conn.setRequestMethod(&quot;POST&quot;);</span>
+<span class="nc" id="L147">            conn.setRequestProperty(&quot;Content-Type&quot;, &quot;application/json&quot;);</span>
+<span class="nc" id="L148">            conn.setRequestProperty(&quot;Authorization&quot;, &quot;Bearer &quot; + apiKey);</span>
+<span class="nc" id="L149">            conn.setDoOutput(true);</span>
+<span class="nc" id="L150">            conn.setConnectTimeout(8000);</span>
+<span class="nc" id="L151">            conn.setReadTimeout(15000);</span>
+
+<span class="nc" id="L153">            try (OutputStream os = conn.getOutputStream()) {</span>
+<span class="nc" id="L154">                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));</span>
+            }
+
+<span class="nc" id="L157">            int httpCode = conn.getResponseCode();</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">            if (httpCode == 401) {</span>
+<span class="nc" id="L159">                throw new IOException(&quot;DeepSeek API key is invalid or unauthorized (401)&quot;);</span>
+            }
+<span class="nc bnc" id="L161" title="All 2 branches missed.">            if (httpCode != 200) {</span>
+<span class="nc" id="L162">                throw new IOException(&quot;DeepSeek API returned HTTP &quot; + httpCode);</span>
+            }
+
+<span class="nc" id="L165">            StringBuilder response = new StringBuilder();</span>
+<span class="nc" id="L166">            try (BufferedReader reader = new BufferedReader(</span>
+<span class="nc" id="L167">                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {</span>
+                String line;
+<span class="nc bnc" id="L169" title="All 2 branches missed.">                while ((line = reader.readLine()) != null) {</span>
+<span class="nc" id="L170">                    response.append(line);</span>
+                }
+            }
+
+<span class="nc" id="L174">            String raw = response.toString();</span>
+<span class="nc" id="L175">            return extractContent(raw);</span>
+
+        } finally {
+<span class="nc" id="L178">            conn.disconnect();</span>
+        }
+    }
+
+    private String buildPrompt(
+            String applicantName, String applicantSkills,
+            double gpa, int hoursAvailable,
+            String positionName, String requiredSkills,
+            int positionHours,
+            int skillScore, int gpaScore, int availScore, int totalScore) {
+
+<span class="nc" id="L189">        return String.format(&quot;&quot;&quot;</span>
+            You are a TA recruitment matching analysis assistant. Based on the information below, generate a concise professional match analysis in English (within 100-200 words), explaining this applicant's strengths and gaps for the position.
+
+            【Applicant Info】
+            Name: %s
+            Skills: %s
+            GPA: %.2f / 4.0
+            Available Hours: %d hours/week
+
+            【Position Info】
+            Position: %s
+            Required Skills: %s
+            Weekly Hours Required: %d hours
+
+            【Match Scores (0-100)】
+            Total Score: %d (Skills %d%% + GPA %d%% + Availability %d%%)
+
+            Output only the analysis text, no markers or formatting.
+            &quot;&quot;&quot;,
+            applicantName, applicantSkills,
+<span class="nc" id="L209">            gpa, hoursAvailable,</span>
+            positionName, requiredSkills,
+<span class="nc" id="L211">            positionHours,</span>
+<span class="nc" id="L212">            totalScore, skillScore, gpaScore, availScore);</span>
+    }
+
+    private String buildFallbackExplanation(
+            String applicantName, String positionName,
+            int skillScore, int gpaScore, int availScore, int totalScore) {
+
+<span class="nc" id="L219">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L220">        sb.append(String.format(&quot;[AI Match Analysis] Total Score: %d/100\n\n&quot;, totalScore));</span>
+<span class="nc" id="L221">        sb.append(String.format(&quot;Applicant %s for %s:\n\n&quot;, applicantName, positionName));</span>
+<span class="nc" id="L222">        sb.append(String.format(&quot;Skill Match: %d%% - &quot;, skillScore));</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if (skillScore &gt;= 80) sb.append(&quot;Highly matching. Can handle core role requirements.&quot;);</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        else if (skillScore &gt;= 50) sb.append(&quot;Partially matching. Some skills need improvement.&quot;);</span>
+<span class="nc" id="L225">        else sb.append(&quot;Low match. Recommended to strengthen relevant skills.&quot;);</span>
+<span class="nc" id="L226">        sb.append(&quot;\n&quot;);</span>
+<span class="nc" id="L227">        sb.append(String.format(&quot;GPA Score: %d%% - &quot;, gpaScore));</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (gpaScore &gt;= 80) sb.append(&quot;Excellent academic performance. Solid theoretical foundation.&quot;);</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">        else if (gpaScore &gt;= 60) sb.append(&quot;Good academic standing. Meets course requirements.&quot;);</span>
+<span class="nc" id="L230">        else sb.append(&quot;Academic performance needs improvement.&quot;);</span>
+<span class="nc" id="L231">        sb.append(&quot;\n&quot;);</span>
+<span class="nc" id="L232">        sb.append(String.format(&quot;Availability: %d%% - &quot;, availScore));</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        if (availScore &gt;= 80) sb.append(&quot;Sufficient time. Can fully commit to TA duties.&quot;);</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        else if (availScore &gt;= 50) sb.append(&quot;Adequate time, but schedule management required.&quot;);</span>
+<span class="nc" id="L235">        else sb.append(&quot;Limited time. Evaluate if coursework can be balanced.&quot;);</span>
+<span class="nc" id="L236">        sb.append(&quot;\n\nOverall: &quot;);</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        if (totalScore &gt;= 80) sb.append(&quot;Highly recommended. Excellent match for this position.&quot;);</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        else if (totalScore &gt;= 60) sb.append(&quot;Consider favorably. Solid overall profile.&quot;);</span>
+<span class="nc" id="L239">        else sb.append(&quot;Proceed with caution. Evaluate other factors.&quot;);</span>
+<span class="nc" id="L240">        return sb.toString();</span>
+    }
+
+    private String extractContent(String raw) {
+<span class="nc" id="L244">        int idx = raw.indexOf(&quot;\&quot;content\&quot;:\&quot;&quot;);</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if (idx &lt; 0) return null;</span>
+<span class="nc" id="L246">        int start = idx + 10;</span>
+<span class="nc" id="L247">        int end = raw.indexOf(&quot;\&quot;&quot;, start);</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (end &lt; 0) return null;</span>
+<span class="nc" id="L249">        String content = raw.substring(start, end);</span>
+<span class="nc" id="L250">        return content</span>
+<span class="nc" id="L251">                .replace(&quot;\\n&quot;, &quot;\n&quot;)</span>
+<span class="nc" id="L252">                .replace(&quot;\\\&quot;&quot;, &quot;\&quot;&quot;)</span>
+<span class="nc" id="L253">                .replace(&quot;\\\\&quot;, &quot;\\&quot;);</span>
+    }
+
+    private static String escapeJson(String s) {
+<span class="nc bnc" id="L257" title="All 2 branches missed.">        if (s == null) return &quot;\&quot;\&quot;&quot;;</span>
+<span class="nc" id="L258">        return &quot;\&quot;&quot; + s</span>
+<span class="nc" id="L259">                .replace(&quot;\\&quot;, &quot;\\\\&quot;)</span>
+<span class="nc" id="L260">                .replace(&quot;\&quot;&quot;, &quot;\\\&quot;&quot;)</span>
+<span class="nc" id="L261">                .replace(&quot;\n&quot;, &quot;\\n&quot;)</span>
+<span class="nc" id="L262">                .replace(&quot;\r&quot;, &quot;\\r&quot;)</span>
+<span class="nc" id="L263">                .replace(&quot;\t&quot;, &quot;\\t&quot;)</span>
+                + &quot;\&quot;&quot;;
+    }
+
+    private static boolean isNonEmpty(String s) {
+<span class="nc bnc" id="L268" title="All 4 branches missed.">        return s != null &amp;&amp; !s.trim().isEmpty();</span>
+    }
+
+    /** Clears the in-memory cache. Useful after deployment. */
+    public void clearCache() {
+<span class="nc" id="L273">        cache.clear();</span>
+<span class="nc" id="L274">    }</span>
+
+    // ============================================================
+    // AI Workload Rebalancing
+    // ============================================================
+
+    /**
+     * 工作负载再平衡建议缓存 Key。
+     * 相同工时快照产生相同建议，避免重复 API 调用。
+     */
+    private static final String WORKLOAD_CACHE_KEY = &quot;workload_rebalance_v1&quot;;
+
+    /**
+     * 内部：一条 TA 工时记录。
+     */
+    public static class WorkloadEntry {
+        public final String taApplicantId;
+        public final String taDisplayName;
+        public final String taUsername;
+        public final int currentHours;
+
+        public WorkloadEntry(String taApplicantId, String taDisplayName,
+<span class="nc" id="L296">                             String taUsername, int currentHours) {</span>
+<span class="nc" id="L297">            this.taApplicantId = taApplicantId;</span>
+<span class="nc" id="L298">            this.taDisplayName = taDisplayName;</span>
+<span class="nc" id="L299">            this.taUsername = taUsername;</span>
+<span class="nc" id="L300">            this.currentHours = currentHours;</span>
+<span class="nc" id="L301">        }</span>
+    }
+
+    /**
+     * DeepSeek 返回的再平衡建议。
+     * action: &quot;reduce&quot; | &quot;no_action&quot;
+     * targetApplicantId: 要调整工时的 TA ID（可为 null）
+     * targetHours: 建议目标工时（可为 null）
+     * reasoning: 中文推理说明
+     * summary: 摘要（供 UI 显示）
+     */
+    public static class RebalanceAdvice {
+        public final String action;
+        public final String targetApplicantId;
+        public final String targetDisplayName;
+        public final Integer targetHours;
+        public final String reasoning;
+        public final String summary;
+
+        public RebalanceAdvice(String action, String targetApplicantId,
+                               String targetDisplayName, Integer targetHours,
+<span class="nc" id="L322">                               String reasoning, String summary) {</span>
+<span class="nc" id="L323">            this.action = action;</span>
+<span class="nc" id="L324">            this.targetApplicantId = targetApplicantId;</span>
+<span class="nc" id="L325">            this.targetDisplayName = targetDisplayName;</span>
+<span class="nc" id="L326">            this.targetHours = targetHours;</span>
+<span class="nc" id="L327">            this.reasoning = reasoning;</span>
+<span class="nc" id="L328">            this.summary = summary;</span>
+<span class="nc" id="L329">        }</span>
+    }
+
+    /**
+     * 调用 DeepSeek 生成工作负载再平衡建议。
+     * 仅在有过载 TA 时调用；无过载时返回 no_action。
+     * 失败时返回 null Caller 应回退到固定规则。
+     *
+     * @param entries    当前所有 TA 的工时数据
+     * @param capacity    安全工时上限（如 20 h/week）
+     * @return            DeepSeek 建议，或 null（API 不可用）
+     */
+    public RebalanceAdvice generateWorkloadRebalanceAdvice(
+            List&lt;WorkloadEntry&gt; entries, int capacity) {
+
+<span class="nc bnc" id="L344" title="All 4 branches missed.">        if (entries == null || entries.isEmpty()) {</span>
+<span class="nc" id="L345">            return new RebalanceAdvice(&quot;no_action&quot;, null, null, null,</span>
+                    &quot;无 TA 数据&quot;, &quot;暂无数据，无需调整&quot;);
+        }
+
+        // 检查是否有过载 TA
+<span class="nc" id="L350">        List&lt;WorkloadEntry&gt; overloaded = entries.stream()</span>
+<span class="nc bnc" id="L351" title="All 2 branches missed.">                .filter(e -&gt; e.currentHours &gt; capacity)</span>
+<span class="nc" id="L352">                .toList();</span>
+
+<span class="nc bnc" id="L354" title="All 2 branches missed.">        if (overloaded.isEmpty()) {</span>
+<span class="nc" id="L355">            return new RebalanceAdvice(&quot;no_action&quot;, null, null, null,</span>
+                    &quot;所有 TA 工时均在安全范围内&quot;, &quot;当前所有 TA 工时均在 &quot; + capacity + &quot;h/week 安全范围内，无需调整&quot;);
+        }
+
+<span class="nc" id="L359">        String cacheKey = WORKLOAD_CACHE_KEY + &quot;_&quot;</span>
+<span class="nc" id="L360">                + entries.hashCode() + &quot;_&quot; + capacity;</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">        if (cache.containsKey(cacheKey)) {</span>
+<span class="nc" id="L362">            String cached = cache.get(cacheKey);</span>
+<span class="nc bnc" id="L363" title="All 4 branches missed.">            if (cached != null &amp;&amp; cached.startsWith(&quot;AI|&quot;)) {</span>
+<span class="nc" id="L364">                return parseCachedAdvice(cached);</span>
+            }
+        }
+
+<span class="nc" id="L368">        String apiKey = loadApiKey();</span>
+<span class="nc bnc" id="L369" title="All 4 branches missed.">        if (apiKey == null || apiKey.isEmpty()) {</span>
+<span class="nc" id="L370">            return null; // Caller 回退到固定规则</span>
+        }
+
+        try {
+<span class="nc" id="L374">            RebalanceAdvice advice = callDeepSeekWorkload(apiKey, entries, capacity, overloaded);</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">            if (advice != null) {</span>
+<span class="nc" id="L376">                cache.put(cacheKey, &quot;AI|&quot; + serializeAdvice(advice));</span>
+            }
+<span class="nc" id="L378">            return advice;</span>
+<span class="nc" id="L379">        } catch (Exception e) {</span>
+<span class="nc" id="L380">            System.err.println(&quot;[LLMService] Workload rebalance API failed: &quot; + e.getMessage());</span>
+<span class="nc" id="L381">            return null; // Caller 回退到固定规则</span>
+        }
+    }
+
+    private RebalanceAdvice callDeepSeekWorkload(String apiKey,
+            List&lt;WorkloadEntry&gt; entries, int capacity,
+            List&lt;WorkloadEntry&gt; overloaded) throws IOException {
+
+        // 构建 TA 列表文本
+<span class="nc" id="L390">        StringBuilder taList = new StringBuilder();</span>
+<span class="nc bnc" id="L391" title="All 2 branches missed.">        for (WorkloadEntry e : entries) {</span>
+<span class="nc bnc" id="L392" title="All 2 branches missed.">            String status = e.currentHours &gt; capacity</span>
+<span class="nc" id="L393">                    ? &quot;【过载】&quot; + e.currentHours + &quot;h&quot;</span>
+<span class="nc" id="L394">                    : e.currentHours + &quot;h&quot;;</span>
+<span class="nc" id="L395">            taList.append(String.format(&quot;  - %s(@%s): %s\n&quot;,</span>
+                    e.taDisplayName, e.taUsername, status));
+<span class="nc" id="L397">        }</span>
+
+<span class="nc" id="L399">        StringBuilder overloadList = new StringBuilder();</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">        for (WorkloadEntry e : overloaded) {</span>
+<span class="nc" id="L401">            overloadList.append(String.format(&quot;  - %s(@%s): %dh (exceeds capacity by %dh)\n&quot;,</span>
+                    e.taDisplayName, e.taUsername,
+<span class="nc" id="L403">                    e.currentHours, e.currentHours - capacity));</span>
+<span class="nc" id="L404">        }</span>
+
+<span class="nc" id="L406">        String prompt = String.format(&quot;&quot;&quot;</span>
+            You are a TA workload intelligent scheduling assistant. Analyze the weekly workload data of the following TAs and provide professional rebalancing advice in English.
+
+            【System Safe Capacity】
+            Maximum safe weekly hours per TA: %d hours
+
+            【All TA Workloads】
+            %s
+
+            【Overloaded TAs】
+            %s
+
+            Please output ONLY in the following JSON format (output JSON only, no other text):
+            {
+              &quot;action&quot;: &quot;reduce&quot; | &quot;no_action&quot;,
+              &quot;targetApplicantId&quot;: &quot;The applicantId of the overloaded TA (e.g. A001), null if action is no_action&quot;,
+              &quot;targetDisplayName&quot;: &quot;Full name of the overloaded TA, null if no_action&quot;,
+              &quot;targetHours&quot;: An integer target hours (&gt;= 0), null if no_action,
+              &quot;reasoning&quot;: &quot;Your reasoning in English (within 100 words), explain why this TA and the suggested value&quot;,
+              &quot;summary&quot;: &quot;A concise summary for the administrator in English (within 50 words)&quot;
+            }
+
+            Notes:
+            - Only output &quot;reduce&quot; when there are overloaded TAs
+            - targetHours should be &gt;= 0 and &lt;= capacity
+            - Prioritize adjusting overloaded TAs to the safe capacity value
+            - Only output one recommendation (the TA most in need of adjustment)
+<span class="nc" id="L433">            &quot;&quot;&quot;, capacity, taList.toString().trim(), overloadList.toString().trim());</span>
+
+<span class="nc" id="L435">        String jsonBody = String.format(&quot;&quot;&quot;</span>
+            {
+              &quot;model&quot;: &quot;%s&quot;,
+              &quot;messages&quot;: [
+                {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: %s}
+              ],
+              &quot;max_tokens&quot;: 350,
+              &quot;temperature&quot;: 0.2
+            }
+<span class="nc" id="L444">            &quot;&quot;&quot;, DEEPSEEK_MODEL, escapeJson(prompt));</span>
+
+<span class="nc" id="L446">        HttpURLConnection conn = (HttpURLConnection) new URL(DEEPSEEK_BASE_URL).openConnection();</span>
+        try {
+<span class="nc" id="L448">            conn.setRequestMethod(&quot;POST&quot;);</span>
+<span class="nc" id="L449">            conn.setRequestProperty(&quot;Content-Type&quot;, &quot;application/json&quot;);</span>
+<span class="nc" id="L450">            conn.setRequestProperty(&quot;Authorization&quot;, &quot;Bearer &quot; + apiKey);</span>
+<span class="nc" id="L451">            conn.setDoOutput(true);</span>
+<span class="nc" id="L452">            conn.setConnectTimeout(8000);</span>
+<span class="nc" id="L453">            conn.setReadTimeout(15000);</span>
+
+<span class="nc" id="L455">            try (OutputStream os = conn.getOutputStream()) {</span>
+<span class="nc" id="L456">                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));</span>
+            }
+
+<span class="nc" id="L459">            int httpCode = conn.getResponseCode();</span>
+<span class="nc bnc" id="L460" title="All 2 branches missed.">            if (httpCode == 401) {</span>
+<span class="nc" id="L461">                throw new IOException(&quot;DeepSeek API key invalid (401)&quot;);</span>
+            }
+<span class="nc bnc" id="L463" title="All 2 branches missed.">            if (httpCode != 200) {</span>
+<span class="nc" id="L464">                throw new IOException(&quot;DeepSeek API HTTP &quot; + httpCode);</span>
+            }
+
+<span class="nc" id="L467">            StringBuilder response = new StringBuilder();</span>
+<span class="nc" id="L468">            try (BufferedReader reader = new BufferedReader(</span>
+<span class="nc" id="L469">                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {</span>
+                String line;
+<span class="nc bnc" id="L471" title="All 2 branches missed.">                while ((line = reader.readLine()) != null) {</span>
+<span class="nc" id="L472">                    response.append(line);</span>
+                }
+            }
+
+<span class="nc" id="L476">            String raw = response.toString();</span>
+<span class="nc" id="L477">            String content = extractContent(raw);</span>
+<span class="nc bnc" id="L478" title="All 4 branches missed.">            if (content == null || content.isEmpty()) return null;</span>
+<span class="nc" id="L479">            return parseAdviceFromLLM(content);</span>
+
+        } finally {
+<span class="nc" id="L482">            conn.disconnect();</span>
+        }
+    }
+
+    /**
+     * 解析 LLM 返回的 JSON 建议。
+     * 对格式偏差有一定容错能力。
+     */
+    private RebalanceAdvice parseAdviceFromLLM(String content) {
+        try {
+<span class="nc" id="L492">            content = content.trim();</span>
+            // 去掉可能的 markdown 代码块标记
+<span class="nc bnc" id="L494" title="All 2 branches missed.">            if (content.startsWith(&quot;```&quot;)) {</span>
+<span class="nc" id="L495">                int firstNewline = content.indexOf('\n');</span>
+<span class="nc bnc" id="L496" title="All 2 branches missed.">                if (firstNewline &gt;= 0) content = content.substring(firstNewline + 1).trim();</span>
+<span class="nc" id="L497">                int lastBacktick = content.lastIndexOf(&quot;```&quot;);</span>
+<span class="nc bnc" id="L498" title="All 2 branches missed.">                if (lastBacktick &gt;= 0) content = content.substring(0, lastBacktick).trim();</span>
+            }
+
+            // 提取各字段（正则容错）
+<span class="nc" id="L502">            String action = extractJsonField(content, &quot;action&quot;);</span>
+<span class="nc" id="L503">            String targetId = extractJsonField(content, &quot;targetApplicantId&quot;);</span>
+<span class="nc bnc" id="L504" title="All 6 branches missed.">            if (targetId != null &amp;&amp; (targetId.equals(&quot;null&quot;) || targetId.isEmpty())) targetId = null;</span>
+<span class="nc" id="L505">            String targetName = extractJsonField(content, &quot;targetDisplayName&quot;);</span>
+<span class="nc bnc" id="L506" title="All 6 branches missed.">            if (targetName != null &amp;&amp; (targetName.equals(&quot;null&quot;) || targetName.isEmpty())) targetName = null;</span>
+<span class="nc" id="L507">            String hoursStr = extractJsonField(content, &quot;targetHours&quot;);</span>
+<span class="nc" id="L508">            Integer hours = null;</span>
+<span class="nc bnc" id="L509" title="All 6 branches missed.">            if (hoursStr != null &amp;&amp; !hoursStr.equals(&quot;null&quot;) &amp;&amp; !hoursStr.isEmpty()) {</span>
+<span class="nc" id="L510">                try { hours = Integer.parseInt(hoursStr.replaceAll(&quot;[^0-9]&quot;, &quot;&quot;)); } catch (Exception ignored) {}</span>
+            }
+<span class="nc" id="L512">            String reasoning = extractJsonField(content, &quot;reasoning&quot;);</span>
+<span class="nc" id="L513">            String summary = extractJsonField(content, &quot;summary&quot;);</span>
+
+<span class="nc" id="L515">            return new RebalanceAdvice(</span>
+<span class="nc bnc" id="L516" title="All 2 branches missed.">                    action != null ? action : &quot;reduce&quot;,</span>
+                    targetId, targetName, hours,
+<span class="nc bnc" id="L518" title="All 2 branches missed.">                    reasoning != null ? reasoning : &quot;&quot;,</span>
+<span class="nc bnc" id="L519" title="All 2 branches missed.">                    summary != null ? summary : &quot;请查看详情&quot;);</span>
+<span class="nc" id="L520">        } catch (Exception e) {</span>
+<span class="nc" id="L521">            System.err.println(&quot;[LLMService] Failed to parse workload advice: &quot; + e.getMessage());</span>
+<span class="nc" id="L522">            return null;</span>
+        }
+    }
+
+    private String extractJsonField(String json, String field) {
+<span class="nc" id="L527">        String search = &quot;\&quot;&quot; + field + &quot;\&quot;&quot;;</span>
+<span class="nc" id="L528">        int idx = json.indexOf(search);</span>
+<span class="nc bnc" id="L529" title="All 2 branches missed.">        if (idx &lt; 0) return null;</span>
+<span class="nc" id="L530">        int colon = json.indexOf(&quot;:&quot;, idx);</span>
+<span class="nc bnc" id="L531" title="All 2 branches missed.">        if (colon &lt; 0) return null;</span>
+<span class="nc" id="L532">        int start = colon + 1;</span>
+<span class="nc bnc" id="L533" title="All 4 branches missed.">        while (start &lt; json.length() &amp;&amp; Character.isWhitespace(json.charAt(start))) start++;</span>
+<span class="nc bnc" id="L534" title="All 2 branches missed.">        if (start &gt;= json.length()) return null;</span>
+<span class="nc" id="L535">        char c = json.charAt(start);</span>
+<span class="nc bnc" id="L536" title="All 2 branches missed.">        if (c == '&quot;') {</span>
+            // 字符串
+<span class="nc" id="L538">            int end = start + 1;</span>
+<span class="nc bnc" id="L539" title="All 2 branches missed.">            while (end &lt; json.length()) {</span>
+<span class="nc bnc" id="L540" title="All 2 branches missed.">                if (json.charAt(end) == '\\') { end += 2; continue; }</span>
+<span class="nc bnc" id="L541" title="All 2 branches missed.">                if (json.charAt(end) == '&quot;') { end++; break; }</span>
+<span class="nc" id="L542">                end++;</span>
+            }
+<span class="nc" id="L544">            return json.substring(start + 1, end - 1);</span>
+<span class="nc bnc" id="L545" title="All 4 branches missed.">        } else if (c == 'n' &amp;&amp; json.substring(start).startsWith(&quot;null&quot;)) {</span>
+<span class="nc" id="L546">            return &quot;null&quot;;</span>
+        } else {
+            // 数字
+<span class="nc" id="L549">            int end = start;</span>
+<span class="nc bnc" id="L550" title="All 8 branches missed.">            while (end &lt; json.length() &amp;&amp; (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-' || json.charAt(end) == '.')) end++;</span>
+<span class="nc" id="L551">            return json.substring(start, end);</span>
+        }
+    }
+
+    private String serializeAdvice(RebalanceAdvice a) {
+<span class="nc bnc" id="L556" title="All 2 branches missed.">        return a.action + &quot;|&quot; + (a.targetApplicantId != null ? a.targetApplicantId : &quot;&quot;)</span>
+<span class="nc bnc" id="L557" title="All 2 branches missed.">                + &quot;|&quot; + (a.targetDisplayName != null ? a.targetDisplayName : &quot;&quot;)</span>
+<span class="nc bnc" id="L558" title="All 2 branches missed.">                + &quot;|&quot; + (a.targetHours != null ? a.targetHours : &quot;&quot;)</span>
+<span class="nc bnc" id="L559" title="All 2 branches missed.">                + &quot;|&quot; + (a.reasoning != null ? a.reasoning : &quot;&quot;)</span>
+<span class="nc bnc" id="L560" title="All 2 branches missed.">                + &quot;|&quot; + (a.summary != null ? a.summary : &quot;&quot;);</span>
+    }
+
+    private RebalanceAdvice parseCachedAdvice(String cached) {
+<span class="nc" id="L564">        String[] parts = cached.substring(3).split(&quot;\\|&quot;, 6);</span>
+<span class="nc" id="L565">        return new RebalanceAdvice(</span>
+<span class="nc bnc" id="L566" title="All 2 branches missed.">                parts.length &gt; 0 ? parts[0] : &quot;no_action&quot;,</span>
+<span class="nc bnc" id="L567" title="All 4 branches missed.">                parts.length &gt; 1 &amp;&amp; !parts[1].isEmpty() ? parts[1] : null,</span>
+<span class="nc bnc" id="L568" title="All 4 branches missed.">                parts.length &gt; 2 &amp;&amp; !parts[2].isEmpty() ? parts[2] : null,</span>
+<span class="nc bnc" id="L569" title="All 4 branches missed.">                parts.length &gt; 3 &amp;&amp; !parts[3].isEmpty() ? Integer.parseInt(parts[3]) : null,</span>
+<span class="nc bnc" id="L570" title="All 2 branches missed.">                parts.length &gt; 4 ? parts[4] : &quot;&quot;,</span>
+<span class="nc bnc" id="L571" title="All 2 branches missed.">                parts.length &gt; 5 ? parts[5] : &quot;&quot;);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
