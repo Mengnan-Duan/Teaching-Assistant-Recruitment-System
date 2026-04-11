@@ -434,6 +434,16 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 </div>
 
 <script>
+function clearRegisterForm() {
+    document.getElementById("regDisplayName").value = "";
+    document.getElementById("regUsername").value = "";
+    document.getElementById("regEmail").value = "";
+    document.getElementById("regPassword").value = "";
+    document.querySelectorAll("#regRoleSelector .role-option").forEach(el => {
+        el.classList.remove("selected");
+        el.querySelector("input").checked = false;
+    });
+}
 var APP_CTX = "<%= request.getContextPath() %>";
 // Load system config (demo accounts, version) from backend on page load
 (async function() {
