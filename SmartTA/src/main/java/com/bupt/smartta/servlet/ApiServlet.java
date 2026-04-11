@@ -1984,43 +1984,43 @@ public class ApiServlet extends HttpServlet {
              + "\"opIcon\":\"" + esc(l.getOpIcon()) + "\"}";
     }
 
-    // 删除有问题的logToJsonExtended方法
-    private String logToJsonExtended(SystemLog l) {
-        if (l == null) return "{}";
-        StringBuilder sb = new StringBuilder();
-        sb.append("{"timestamp":"").append(esc(l.getTimestamp())).append("",");
-        sb.append(""operation":"").append(esc(l.getOperation())).append("",");
-        sb.append(""fileName":"").append(esc(l.getFileName())).append("",");
-        sb.append(""status":"").append(esc(l.getStatus())).append("",");
-        sb.append(""opIcon":"").append(esc(l.getOpIcon())).append(""");
-        
-        // 添加新字段
-        if (l.getLevel() != null) {
-            sb.append(","level":"").append(esc(l.getLevel())).append(""");
-        }
-        if (l.getUserId() != null) {
-            sb.append(","userId":"").append(esc(l.getUserId())).append(""");
-        }
-        if (l.getIpAddress() != null) {
-            sb.append(","ipAddress":"").append(esc(l.getIpAddress())).append(""");
-        }
-        if (l.getSessionId() != null) {
-            sb.append(","sessionId":"").append(esc(l.getSessionId())).append(""");
-        }
-        if (l.getDetail() != null) {
-            sb.append(","detail":"").append(esc(l.getDetail())).append(""");
-        }
-        
-        sb.append("}");
-        return sb.toString();
+// 修复后的 logToJsonExtended 方法
+private String logToJsonExtended(SystemLog l) {
+    if (l == null) return "{}";
+    StringBuilder sb = new StringBuilder();
+    sb.append("{\"timestamp\":\"").append(esc(l.getTimestamp())).append("\",");
+    sb.append("\"operation\":\"").append(esc(l.getOperation())).append("\",");
+    sb.append("\"fileName\":\"").append(esc(l.getFileName())).append("\",");
+    sb.append("\"status\":\"").append(esc(l.getStatus())).append("\",");
+    sb.append("\"opIcon\":\"").append(esc(l.getOpIcon())).append("\"");
+
+    // 添加新字段
+    if (l.getLevel() != null) {
+        sb.append(",\"level\":\"").append(esc(l.getLevel())).append("\"");
+    }
+    if (l.getUserId() != null) {
+        sb.append(",\"userId\":\"").append(esc(l.getUserId())).append("\"");
+    }
+    if (l.getIpAddress() != null) {
+        sb.append(",\"ipAddress\":\"").append(esc(l.getIpAddress())).append("\"");
+    }
+    if (l.getSessionId() != null) {
+        sb.append(",\"sessionId\":\"").append(esc(l.getSessionId())).append("\"");
+    }
+    if (l.getDetail() != null) {
+        sb.append(",\"detail\":\"").append(esc(l.getDetail())).append("\"");
     }
 
-    private String esc(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
+    sb.append("}");
+    return sb.toString();
+}
+
+private String esc(String s) {
+    if (s == null) return "";
+    return s.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t");
+}
 }
