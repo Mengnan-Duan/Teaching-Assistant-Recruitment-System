@@ -5,6 +5,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Error · Smart-TA</title>
+    <link rel="icon" href="<%= request.getContextPath() %>/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="<%= request.getContextPath() %>/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="css/smartta-shell.css" />
     <style>
         body.smartta-shell {

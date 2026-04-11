@@ -20,6 +20,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>MO Portal · Smart-TA</title>
+<link rel="icon" href="<%= request.getContextPath() %>/favicon.ico" type="image/x-icon" />
+<link rel="icon" href="<%= request.getContextPath() %>/favicon.svg" type="image/svg+xml" />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="css/smartta-shell.css" />
 <style>
@@ -199,6 +201,7 @@ tr:last-child td { border-bottom:none; }
                 <div id="moRoleMenu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);min-width:220px;z-index:200;overflow:hidden;"></div>
             </div>
         </div>
+        <span id="moUnreadBadge" class="pill-count" style="display:none;background:var(--accent-soft);color:var(--accent)" title="Unread messages">0</span>
         <span class="version-tag">v2.0</span>
     </div>
 </div>
@@ -212,10 +215,24 @@ tr:last-child td { border-bottom:none; }
     <!-- MAIN CONTENT -->
     <div>
         <!-- SUB-TABS -->
-        <div style="display:flex;gap:6px;margin-bottom:20px;">
+        <div style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;">
+            <button class="btn btn-outline" id="tab-modules" onclick="switchTab('modules')">My Modules</button>
             <button class="btn btn-primary" id="tab-post" onclick="switchTab('post')">Post Position</button>
-            <button class="btn btn-outline" id="tab-review" onclick="switchTab('review')">Review Applicants</button>
             <button class="btn btn-outline" id="tab-quota" onclick="switchTab('quota')">Manage Quotas</button>
+            <button class="btn btn-outline" id="tab-mytas" onclick="switchTab('mytas')">My TAs &amp; Messages</button>
+            <button class="btn btn-outline" id="tab-profile" onclick="switchTab('profile')">My Profile</button>
+        </div>
+
+        <!-- MY MODULES TAB -->
+        <div id="content-modules">
+            <div class="card-section">
+                <div class="section-header">
+                    <h2>My Modules</h2>
+                    <span id="modulesCount" class="pill-count">0</span>
+                </div>
+                <p style="font-size:0.78rem;color:var(--muted);margin-bottom:14px;">View and manage your assigned modules. Click Edit to modify details or Delete to remove.</p>
+                <div id="myModulesList"><div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:20px">Loading…</div></div>
+            </div>
         </div>
 
         <!-- POST POSITION TAB -->
@@ -261,32 +278,6 @@ tr:last-child td { border-bottom:none; }
             </div>
         </div>
 
-        <!-- REVIEW APPLICANTS TAB -->
-        <div id="content-review" style="display:none">
-            <div class="card-section">
-                <div class="section-header">
-                    <h2>Applicants — <span id="selectedPosLabel">Select a position</span></h2>
-                    <div class="section-header-actions">
-                        <span class="ai-inline-badge">AI &#x2605; DeepSeek</span>
-                        <span class="pill-count" id="applicantCount">0 Applicants</span>
-                    </div>
-                </div>
-                <div class="filter-bar">
-                    <label>Position:</label>
-                    <select id="positionSelect" onchange="loadApplicantsForPosition()">
-                        <option value="">-- Select Position --</option>
-                    </select>
-                    <label style="margin-left:12px">Sort:</label>
-                    <select id="applicantSort" onchange="renderApplicantTable()">
-                        <option value="score">AI Score</option>
-                        <option value="gpa">GPA</option>
-                        <option value="name">Name</option>
-                    </select>
-                </div>
-                <div id="applicantsTable"></div>
-            </div>
-        </div>
-
         <!-- MANAGE QUOTAS TAB -->
         <div id="content-quota" style="display:none">
             <div class="card-section">
@@ -299,6 +290,56 @@ tr:last-child td { border-bottom:none; }
                     <div class="file-save-spinner"></div>
                     <span>Saving quotas...</span>
                 </div>
+            </div>
+        </div>
+
+        <!-- MY TAS & MESSAGES TAB -->
+        <div id="content-mytas" style="display:none">
+            <!-- 左侧：待审核申请者 -->
+            <div class="card-section">
+                <div class="section-header">
+                    <h2>Pending TA Applicants</h2>
+                    <span class="ai-inline-badge">Submitted / Under Review</span>
+                </div>
+                <p style="font-size:0.78rem;color:var(--muted);margin-bottom:14px;">Download CV to auto-advance to Under Review. Accept to officially recruit; Reject to decline.</p>
+                <div id="pendingApplicantsList"><div style="color:var(--muted);font-size:0.85rem">Loading…</div></div>
+            </div>
+
+            <!-- 右侧：已接受 TA -->
+            <div class="card-section">
+                <div class="section-header">
+                    <h2>My TAs</h2>
+                    <span class="ai-inline-badge">Accepted</span>
+                </div>
+                <p style="font-size:0.78rem;color:var(--muted);margin-bottom:14px;">TAs accepted on your posted positions.</p>
+                <div id="myTasList"><div style="color:var(--muted);font-size:0.85rem">Loading…</div></div>
+            </div>
+
+            <!-- 消息卡片 -->
+            <div class="card-section" id="moMsgCard" style="display:none">
+                <div class="section-header">
+                    <h2 id="moMsgCardTitle">Messages</h2>
+                    <span id="moMsgCardStatus" class="status-chip" style="display:none"></span>
+                </div>
+                <div style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;" id="moMsgHint"></div>
+                <div id="moMsgThread" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;background:#fafaf8;font-size:0.82rem;"></div>
+                <label style="font-size:0.78rem;font-weight:700;color:var(--muted)">New message</label>
+                <textarea id="moMsgBody" style="width:100%;min-height:72px;margin-top:6px" placeholder="Write to your TA…"></textarea>
+                <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">
+                    <button type="button" class="btn btn-outline" onclick="closeMoMsgCard()">Close</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="sendMoTaMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MY PROFILE TAB -->
+        <div id="content-profile" style="display:none">
+            <div class="card-section">
+                <div class="section-header">
+                    <h2>My Profile</h2>
+                    <button class="btn btn-primary btn-sm" onclick="saveMoProfile()">Save Changes</button>
+                </div>
+                <div id="moProfileDisplay" style="margin-bottom:20px;"></div>
             </div>
         </div>
     </div>
@@ -347,12 +388,45 @@ tr:last-child td { border-bottom:none; }
 </div>
 <div id="toastContainer"></div>
 
+<div class="modal-overlay" id="moConfirmOverlay" onclick="if(event.target===this)moConfirmFinish(false)" style="z-index:1100;">
+    <div class="modal" onclick="event.stopPropagation()">
+        <h2 id="moConfirmTitle">Confirm</h2>
+        <p id="moConfirmMessage" style="margin:12px 0 20px;line-height:1.55;"></p>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+            <button type="button" class="btn btn-outline" onclick="moConfirmFinish(false)">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="moConfirmFinish(true)">OK</button>
+        </div>
+    </div>
+</div>
+
 <script>
+var moConfirmResolver = null;
+function showMoConfirm(message, title) {
+    title = title || "Please confirm";
+    return new Promise(function(resolve) {
+        moConfirmResolver = resolve;
+        document.getElementById("moConfirmTitle").textContent = title;
+        document.getElementById("moConfirmMessage").textContent = message;
+        document.getElementById("moConfirmOverlay").classList.add("show");
+    });
+}
+function moConfirmFinish(ok) {
+    document.getElementById("moConfirmOverlay").classList.remove("show");
+    if (moConfirmResolver) {
+        moConfirmResolver(ok);
+        moConfirmResolver = null;
+    }
+}
+
 let moState = {
     csrfToken: null,
     positions: [], applicants: [], applications: [], session: {}, quotaChanges: {},
     positionDefaults: null,
-    dataTraceability: null
+    dataTraceability: null,
+    myTas: [],
+    pendingApplicants: [],
+    selectedTaApplicantId: null,
+    selectedTaContext: "accepted"
 };
 
 (async function init() {
@@ -360,6 +434,8 @@ let moState = {
     if (!moState.session.username) return;
     document.getElementById("posDeadline").min = new Date().toISOString().split("T")[0];
     await Promise.all([loadAll(), loadSystemConfig()]);
+    refreshMoUnread();
+    setInterval(refreshMoUnread, 25000);
 })();
 
 // Load system config from backend (position defaults, data traceability)
@@ -506,40 +582,185 @@ async function doMoLogout() {
 async function loadAll() {
     try {
         let [pRes, aRes, appRes] = await Promise.all([
-            fetch("api/positions"),
+            fetch("api/moPositions"),
             fetch("api/applicants"),
             fetch("api/applications")
         ]);
         let [pJson, aJson, appJson] = await Promise.all([pRes.json(), aRes.json(), appRes.json()]);
-        moState.positions = pJson.positions || [];
+        moState.positions = pJson.moPositions || [];
         moState.applicants = aJson.applicants || [];
         moState.applications = appJson.applications || [];
         renderSidebarStats();
-        renderPositionSelect();
         renderQuotas();
+        renderPositionSelect();
     } catch(e) { console.error(e); }
 }
 
 function renderSidebarStats() {
-    document.getElementById("statTotal").textContent = moState.positions.length;
-    document.getElementById("statTotalApps").textContent = moState.applications.length;
-    document.getElementById("statAccepted").textContent = moState.applications.filter(a => a.status === "Accepted").length;
-    let scores = moState.applications.map(a => a.aiScore);
+    // moState.positions 已经是按MO过滤后的课程
+    let filteredPositions = moState.positions;
+    let filteredApps = moState.applications.filter(a =>
+        filteredPositions.some(p => p.code === a.positionCode)
+    );
+    document.getElementById("statTotal").textContent = filteredPositions.length;
+    document.getElementById("statTotalApps").textContent = filteredApps.length;
+    document.getElementById("statAccepted").textContent = filteredApps.filter(a => a.status === "Accepted").length;
+    let scores = filteredApps.map(a => a.aiScore);
     document.getElementById("statAvgScore").textContent = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : "--";
+}
+
+async function loadMyModules() {
+    let el = document.getElementById("myModulesList");
+    try {
+        let res = await fetch("api/moPositions");
+        if (!res.ok) { el.innerHTML = "<span style=color:var(--accent)>Failed to load modules.</span>"; return; }
+        let j = await res.json();
+        let modules = j.moPositions || [];
+        document.getElementById("modulesCount").textContent = modules.length;
+
+        if (!modules.length) {
+            el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">No modules assigned yet. Use "Post Position" to create your first module.</p>';
+            return;
+        }
+
+        let statusMap = { "Open": "status-accepted", "Closed": "status-rejected" };
+        let html = "<table><thead><tr><th>Code</th><th>Name</th><th>Skills</th><th>Slots</th><th>Deadline</th><th>Status</th><th>Actions</th></tr></thead><tbody>";
+        modules.forEach(m => {
+            let stClass = statusMap[m.status] || "status-submitted";
+            let slotsInfo = m.filledSlots + ' / ' + m.totalSlots;
+            let skillsDisplay = m.skillsList ? m.skillsList.slice(0, 3).join(', ') : (m.requiredSkills || '');
+            if (m.skillsList && m.skillsList.length > 3) skillsDisplay += '...';
+            html += "<tr>" +
+                "<td><strong style='color:var(--primary-dark)'>" + escMo(m.code) + "</strong></td>" +
+                "<td>" + escMo(m.name) + "</td>" +
+                "<td><span style='font-size:0.78rem;color:var(--muted)'>" + escMo(skillsDisplay) + "</span></td>" +
+                "<td><strong>" + slotsInfo + "</strong></td>" +
+                "<td>" + escMo(m.deadline || '-') + "</td>" +
+                "<td><span class='status-chip " + stClass + "'>" + escMo(m.status || 'Open') + "</span></td>" +
+                "<td style='white-space:nowrap'>" +
+                    "<button type='button' class='btn btn-primary btn-sm' onclick='editModule(\"" + escMoAttr(m.code) + "\")'>Edit</button> " +
+                    "<button type='button' class='btn btn-reject btn-sm' onclick='deleteModule(\"" + escMoAttr(m.code) + "\")'>Delete</button>" +
+                "</td></tr>";
+        });
+        html += "</tbody></table>";
+        el.innerHTML = html;
+    } catch (e) {
+        el.innerHTML = "<span style=color:var(--accent)>Error loading modules.</span>";
+    }
+}
+
+function editModule(code) {
+    let m = moState.positions.find(p => p.code === code);
+    if (!m) return;
+    let skillsStr = (m.skillsList || []).join(", ");
+    let html = "<div class='form-grid'>" +
+        "<div class='form-group'><label>Module Code</label><input id='modCode' type='text' value='" + escMo(m.code) + "' readonly style='background:#f0f0f0;cursor:not-allowed'/></div>" +
+        "<div class='form-group'><label>Module Name</label><input id='modName' type='text' value='" + escMo(m.name) + "' style='width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;'/></div>" +
+        "<div class='form-group'><label>Required Skills</label><input id='modSkills' type='text' value='" + escMo(skillsStr) + "' placeholder='Java, Agile, Git (comma separated)' style='width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;'/></div>" +
+        "<div class='form-group'><label>Hours/Week</label><select id='modHours' style='width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;'>" +
+            "<option value='4'" + (m.hoursPerWeek == 4 ? ' selected' : '') + ">4</option>" +
+            "<option value='6'" + (m.hoursPerWeek == 6 ? ' selected' : '') + ">6</option>" +
+            "<option value='8'" + (m.hoursPerWeek == 8 ? ' selected' : '') + ">8</option>" +
+            "<option value='10'" + (m.hoursPerWeek == 10 ? ' selected' : '') + ">10</option>" +
+        "</select></div>" +
+        "<div class='form-group'><label>Deadline</label><input id='modDeadline' type='date' value='" + escMo(m.deadline || '') + "' style='width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;'/></div>" +
+        "<div class='form-group'><label>Total Slots</label><input id='modSlots' type='number' min='1' max='10' value='" + m.totalSlots + "' style='width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;'/></div>" +
+        "<div class='form-group full'><label>Description</label><textarea id='modDesc' style='width:100%;min-height:80px;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;'>" + escMo(m.description || '') + "</textarea></div>" +
+        "<div class='modal-actions'><button type='button' class='btn btn-outline' onclick='closeModal()'>Cancel</button>" +
+        "<button type='button' class='btn btn-primary' onclick='submitModuleEdit(\"" + escMoAttr(code) + "\")'>Save Changes</button></div>";
+    openModal("Edit Module — " + code, html);
+}
+
+async function submitModuleEdit(code) {
+    let csrf = moState.csrfToken || sessionStorage.getItem("csrfToken") || "";
+    let name = document.getElementById("modName").value.trim();
+    let skills = document.getElementById("modSkills").value.trim();
+    let hours = document.getElementById("modHours").value;
+    let deadline = document.getElementById("modDeadline").value;
+    let slots = document.getElementById("modSlots").value;
+    let desc = document.getElementById("modDesc").value.trim();
+
+    if (!name || !skills) {
+        showToast("Name and skills are required", "error"); return;
+    }
+
+    try {
+        let p = new URLSearchParams();
+        p.append("_csrf", csrf);
+        p.append("code", code);
+        p.append("name", name);
+        p.append("requiredSkills", skills);
+        p.append("hoursPerWeek", hours);
+        p.append("deadline", deadline);
+        p.append("totalSlots", slots);
+        p.append("description", desc);
+
+        let res = await fetch("api/position", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p.toString(),
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if (json.success) {
+            closeModal();
+            showToast("Module updated successfully!", "success");
+            await loadAll();
+            loadMyModules();
+        } else {
+            showToast(json.message || "Failed to update module", "error");
+        }
+    } catch (e) {
+        showToast("Error: " + e.message, "error");
+    }
+}
+
+async function deleteModule(code) {
+    if (!await showMoConfirm("Delete module " + code + "? This will also remove all its applications. This action cannot be undone.", "Delete Module")) return;
+
+    let csrf = moState.csrfToken || sessionStorage.getItem("csrfToken") || "";
+    try {
+        let p = new URLSearchParams();
+        p.append("_csrf", csrf);
+        p.append("positionCode", code);
+
+        let res = await fetch("api/positionDelete", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p.toString(),
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if (json.success) {
+            showToast("Module deleted successfully!", "success");
+            await loadAll();
+            loadMyModules();
+        } else {
+            showToast(json.message || "Failed to delete module", "error");
+        }
+    } catch (e) {
+        showToast("Error: " + e.message, "error");
+    }
 }
 
 function renderPositionSelect() {
     let sel = document.getElementById("positionSelect");
+    if (!sel) return;
     let options = '<option value="">-- Select Position --</option>';
     moState.positions.forEach(p => { options += '<option value="' + p.code + '">' + p.code + ' — ' + p.name + '</option>'; });
     sel.innerHTML = options;
 }
 
 function loadApplicantsForPosition() {
-    let code = document.getElementById("positionSelect").value;
-    document.getElementById("selectedPosLabel").textContent = code ? code : "Select a position";
-    document.getElementById("applicantCount").textContent = "0 Applicants";
-    if (!code) { document.getElementById("applicantsTable").innerHTML = ""; return; }
+    let sel = document.getElementById("positionSelect");
+    if (!sel) return;
+    let code = sel.value;
+    let labelEl = document.getElementById("selectedPosLabel");
+    let countEl = document.getElementById("applicantCount");
+    let tableEl = document.getElementById("applicantsTable");
+    if (labelEl) labelEl.textContent = code ? code : "Select a position";
+    if (countEl) countEl.textContent = "0 Applicants";
+    if (!code) { if (tableEl) tableEl.innerHTML = ""; return; }
     renderApplicantTable();
 }
 
@@ -553,9 +774,13 @@ function computeAIScore(applicant, requiredSkills) {
 }
 
 function renderApplicantTable() {
-    let code = document.getElementById("positionSelect").value;
-    let sort = document.getElementById("applicantSort").value;
+    let sel = document.getElementById("positionSelect");
+    if (!sel) return;
+    let code = sel.value;
+    let sortEl = document.getElementById("applicantSort");
     let container = document.getElementById("applicantsTable");
+    if (!container) return;
+    let sort = sortEl ? sortEl.value : "score";
     let pos = moState.positions.find(p => p.code === code);
     if (!pos) { container.innerHTML = ""; return; }
     let reqSkills = pos.skillsList || [];
@@ -629,7 +854,7 @@ async function showAppLLMDetail(appId, applicantId, positionCode) {
     let detailHtml = `
         <div style="margin-bottom:14px">
             <strong>Applicant:</strong> ${applicant.name} &nbsp;(${applicant.yearOfStudy})<br/>
-            <strong>Position:</strong> ${pos.code} &mdash; ${pos.name}<br/>
+            <strong>Position:</strong> <strong style="color:var(--primary-dark)">${pos.code}</strong> &mdash; ${pos.name}<br/>
             <strong>Status:</strong> ${app.status} &nbsp; <strong>Applied:</strong> ${app.appliedAt}
         </div>
         <div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap">
@@ -668,11 +893,12 @@ async function publishPosition() {
     let slots = document.getElementById("posSlots").value;
     let deadline = document.getElementById("posDeadline").value;
     let postedBy = document.getElementById("posPostedBy").value.trim();
+    if (!postedBy) postedBy = (moState.session.displayName || "").trim();
     let desc = document.getElementById("posDesc").value.trim();
     if (!code || !name || !skills) {
         showToast("Please fill in code, name, and required skills", "error"); return;
     }
-    if (!confirm("Are you sure you want to publish this position?")) return;
+    if (!(await showMoConfirm("Are you sure you want to publish this position?", "Publish position"))) return;
 
     let bar = document.getElementById("fileSaveBar");
     bar.classList.add("active");
@@ -720,7 +946,7 @@ async function updateStatus(appId, status) {
     let confirmMsg = status === "Accepted"
         ? "Are you sure you want to accept this applicant?"
         : "Are you sure you want to reject this applicant?";
-    if (!confirm(confirmMsg)) return;
+    if (!(await showMoConfirm(confirmMsg, "Update application"))) return;
     let btnGroup = event.target.closest("td");
     if (btnGroup) {
         let btns = btnGroup.querySelectorAll("button");
@@ -753,8 +979,14 @@ async function updateStatus(appId, status) {
 
 function renderQuotas() {
     let container = document.getElementById("quotasList");
+    // moState.positions 已经是按MO过滤后的课程
+    let myPositions = moState.positions;
+    if (myPositions.length === 0) {
+        container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">No modules assigned to you yet. Post a position to get started.</p>';
+        return;
+    }
     let html = "";
-    moState.positions.forEach(p => {
+    myPositions.forEach(p => {
         let pct = p.totalSlots > 0 ? (p.filledSlots / p.totalSlots * 100) : 0;
         let fillClass = p.isOpen ? "open" : "closed";
         let pendingTotal = moState.quotaChanges[p.code];
@@ -763,7 +995,7 @@ function renderQuotas() {
         let unsavedTag = isModified ? ' <span style="color:var(--warn);font-size:0.72rem">(unsaved)</span>' : '';
         html += '<div class="quota-item">' +
             '<div class="quota-info">' +
-                '<div class="quota-code">' + p.code + ' — ' + p.name + unsavedTag + '</div>' +
+                '<div class="quota-code"><strong style="color:var(--primary-dark)">' + p.code + '</strong> <span style="color:var(--muted)">—</span> ' + p.name + unsavedTag + '</div>' +
                 '<div class="quota-meta">' + p.filledSlots + ' filled / ' + displayTotal + ' total &middot; Deadline: ' + p.deadline + '</div>' +
                 '<div class="progress-bar"><div class="progress-fill ' + fillClass + '" style="width:' + pct + '%"></div></div>' +
             '</div>' +
@@ -794,8 +1026,11 @@ async function saveQuotas() {
     bar.classList.add("active");
     let saved = 0, failed = 0;
     let csrf = moState.csrfToken || sessionStorage.getItem("csrfToken") || "";
+    let myCodes = moState.positions.map(p => p.code);
     try {
         for (let [code, totalSlots] of Object.entries(moState.quotaChanges)) {
+            // 只保存当前MO有权限的课程配额
+            if (!myCodes.includes(code)) continue;
             let p = new URLSearchParams();
             p.append("_csrf", csrf);
             p.append("positionCode", code);
@@ -826,12 +1061,321 @@ async function saveQuotas() {
 }
 
 function switchTab(tab) {
+    document.getElementById("content-modules").style.display = tab === "modules" ? "block" : "none";
     document.getElementById("content-post").style.display = tab === "post" ? "block" : "none";
-    document.getElementById("content-review").style.display = tab === "review" ? "block" : "none";
     document.getElementById("content-quota").style.display = tab === "quota" ? "block" : "none";
+    document.getElementById("content-mytas").style.display = tab === "mytas" ? "block" : "none";
+    document.getElementById("content-profile").style.display = tab === "profile" ? "block" : "none";
+    document.getElementById("tab-modules").className = "btn " + (tab === "modules" ? "btn-primary" : "btn-outline");
     document.getElementById("tab-post").className = "btn " + (tab === "post" ? "btn-primary" : "btn-outline");
-    document.getElementById("tab-review").className = "btn " + (tab === "review" ? "btn-primary" : "btn-outline");
     document.getElementById("tab-quota").className = "btn " + (tab === "quota" ? "btn-primary" : "btn-outline");
+    document.getElementById("tab-mytas").className = "btn " + (tab === "mytas" ? "btn-primary" : "btn-outline");
+    document.getElementById("tab-profile").className = "btn " + (tab === "profile" ? "btn-primary" : "btn-outline");
+    if (tab === "modules") { loadMyModules(); }
+    if (tab === "mytas") { loadMyTas(); loadPendingApplicants(); }
+    if (tab === "profile") loadMoProfile();
+}
+
+async function refreshMoUnread() {
+    try {
+        let res = await fetch("api/messageUnread", { credentials: "same-origin" });
+        if (!res.ok) return;
+        let j = await res.json();
+        let n = j.unread || 0;
+        let el = document.getElementById("moUnreadBadge");
+        if (!el) return;
+        if (n > 0) { el.style.display = "inline-block"; el.textContent = n + " unread"; }
+        else { el.style.display = "none"; }
+    } catch (e) {}
+}
+
+async function loadMyTas() {
+    let el = document.getElementById("myTasList");
+    try {
+        let res = await fetch("api/myTas", { credentials: "same-origin" });
+        if (!res.ok) { el.innerHTML = "<span style=color:var(--accent)>Could not load.</span>"; return; }
+        let j = await res.json();
+        moState.myTas = j.myTas || [];
+        if (!moState.myTas.length) {
+            el.innerHTML = "<p style=color:var(--muted)>No accepted TAs on your postings yet.</p>";
+            return;
+        }
+        el.innerHTML = "<table><thead><tr><th>TA</th><th>Applicant</th><th>Modules</th><th>Actions</th></tr></thead><tbody>" +
+            moState.myTas.map(function(row) {
+                let mods = (row.acceptedApplications || []).map(function(a) {
+                    return "<strong>" + escMo(a.positionCode || "") + "</strong>" +
+                           "<span style=\"color:var(--muted)\"> — </span>" + escMo(a.positionName || "");
+                }).join("<br/>");
+                let name = row.taDisplayName || (row.applicant && row.applicant.name) || row.applicantId;
+                return "<tr><td><strong>" + escMo(name) + "</strong><br/><span style=font-size:0.72rem;color:var(--muted)>@" + escMo(row.taUsername || "—") + "</span></td><td>" + escMo(row.applicantId) + "</td><td style=\"font-size:0.85rem\">" + mods + "</td><td style=white-space:nowrap>" +
+                    "<button type=button class=\"btn btn-primary btn-sm\" onclick=\"openMoTaMsg('" + escMoAttr(row.applicantId) + "','" + escMoAttr(name) + "','accepted')\">Messages</button> " +
+                    "<button type=button class=\"btn btn-outline btn-sm\" onclick=\"moEditApplicant('" + escMoAttr(row.applicantId) + "')\">Edit</button> " +
+                    "<button type=button class=\"btn btn-reject btn-sm\" onclick=\"moRetractTa('" + escMoAttr(row.applicantId) + "')\">Retract</button></td></tr>";
+            }).join("") + "</tbody></table>";
+    } catch (e) {
+        el.innerHTML = "<span style=color:var(--accent)>Failed to load.</span>";
+    }
+}
+
+async function loadPendingApplicants() {
+    let el = document.getElementById("pendingApplicantsList");
+    try {
+        let res = await fetch("api/pendingApplicants", { credentials: "same-origin" });
+        if (!res.ok) { el.innerHTML = "<span style=color:var(--accent)>Could not load.</span>"; return; }
+        let j = await res.json();
+        moState.pendingApplicants = j.pendingApplicants || [];
+        renderPendingApplicants();
+    } catch (e) {
+        el.innerHTML = "<span style=color:var(--accent)>Failed to load.</span>";
+    }
+}
+
+function renderPendingApplicants() {
+    let el = document.getElementById("pendingApplicantsList");
+    let rows = moState.pendingApplicants || [];
+    if (!rows.length) {
+        el.innerHTML = "<p style=\"color:var(--muted)\">No pending applicants on your postings yet.</p>";
+        return;
+    }
+    let scoreColor = function(score) {
+        if (score >= 75) return "var(--success)";
+        if (score >= 55) return "#b8860b";
+        return "var(--accent)";
+    };
+    let fillClass = function(score) {
+        if (score >= 75) return "fill-high";
+        if (score >= 55) return "fill-mid";
+        return "fill-low";
+    };
+    let statusClass = function(st) {
+        if (st === "Submitted") return "status-submitted";
+        if (st === "Under Review") return "status-review";
+        return "status-submitted";
+    };
+    let html = "<table><thead><tr><th>Rank</th><th>Applicant</th><th>Position</th><th>Status</th><th>AI Score</th><th>Actions</th></tr></thead><tbody>";
+    rows.forEach(function(row, idx) {
+        let app = row.application || {};
+        let tap = row.applicant || {};
+        let name = tap.name || row.taDisplayName || app.applicantName || row.applicantId || "";
+        let cvBtn = tap.cvFileName
+            ? "<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"downloadPendingCv('" + escMoAttr(row.applicantId) + "','" + escMoAttr(name) + "')\">Download CV</button>"
+            : "<button type=\"button\" class=\"btn btn-primary btn-sm\" disabled title=\"No CV uploaded\">Download CV</button>";
+        let accDis = (app.status === "Accepted") ? "disabled" : "";
+        let rejDis = (app.status === "Rejected") ? "disabled" : "";
+        let rankColor = (idx === 0) ? "var(--success)" : "var(--ink)";
+        let sc = scoreColor(app.aiScore || 0);
+        let fc = fillClass(app.aiScore || 0);
+        let stc = statusClass(app.status);
+        html += "<tr>";
+        html += "<td><strong style=\"color:" + rankColor + "\">#" + (idx+1) + "</strong></td>";
+        html += "<td><strong>" + escMo(name) + "</strong><br/><span style=\"font-size:0.72rem;color:var(--muted)\">@" + escMo(row.taUsername || "—") + "</span><br/><span style=\"font-size:0.72rem;color:var(--muted)\">GPA: " + escMo(String(tap.gpa)) + "</span></td>";
+        html += "<td><strong style=\"color:var(--primary-dark)\">" + escMo(app.positionCode || "") + "</strong><br/><span style=\"font-size:0.72rem;color:var(--muted)\">" + escMo(app.positionName || "") + "</span></td>";
+        html += "<td><span class=\"status-chip " + stc + "\">" + escMo(app.status || "") + "</span></td>";
+        html += "<td><div style=\"display:flex;align-items:center;gap:8px\"><div class=\"match-bar\" style=\"width:80px\"><div class=\"fill " + fc + "\" style=\"width:" + (app.aiScore || 0) + "%\"></div></div><strong style=\"color:" + sc + "\">" + (app.aiScore || 0) + "</strong></div></td>";
+        html += "<td style=\"white-space:nowrap\">" + cvBtn + " ";
+        html += "<button type=\"button\" class=\"btn btn-accept btn-sm\" onclick=\"updatePendingStatus('" + escMoAttr(app.id) + "','Accepted')\" " + accDis + ">Accept</button> ";
+        html += "<button type=\"button\" class=\"btn btn-reject btn-sm\" onclick=\"updatePendingStatus('" + escMoAttr(app.id) + "','Rejected')\" " + rejDis + ">Reject</button> ";
+        html += "<button type=\"button\" class=\"btn btn-outline btn-sm\" onclick=\"openMoTaMsg('" + escMoAttr(row.applicantId) + "','" + escMoAttr(name) + "','pending')\">Messages</button>";
+        html += "</td></tr>";
+    });
+    html += "</tbody></table>";
+    el.innerHTML = html;
+}
+
+function downloadPendingCv(applicantId, name) {
+    window.open("download?applicantId=" + encodeURIComponent(applicantId), "_blank");
+    setTimeout(function() { loadPendingApplicants(); }, 1500);
+}
+async function updatePendingStatus(appId, status) {
+    let confirmMsg = status === "Accepted"
+        ? "Accept this TA? Their application will be marked Accepted and they will appear in your My TAs list."
+        : "Reject this applicant?";
+    if (!(await showMoConfirm(confirmMsg, "Update application"))) return;
+    let csrf = moState.csrfToken || sessionStorage.getItem("csrfToken") || "";
+    let p = new URLSearchParams();
+    p.append("_csrf", csrf);
+    p.append("applicationId", appId);
+    p.append("status", status);
+    try {
+        let res = await fetch("api/updateStatus", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p.toString(),
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if (json.success) {
+            showToast("Application " + status.toLowerCase() + " successfully!", "success");
+            await loadPendingApplicants();
+            await loadMyTas();
+            await loadAll();
+        } else {
+            showToast(json.message || "Failed to update", "error");
+        }
+    } catch(e) {
+        showToast("Error: " + e.message, "error");
+    }
+}
+
+function loadMoProfile() {
+    let el = document.getElementById("moProfileDisplay");
+    let s = moState.session || {};
+    let dispName = s.displayName || "";
+    let email = s.email || "";
+    let uname = s.username || "";
+    el.innerHTML =
+        "<div class=\"form-grid\">" +
+        "<div class=\"form-group\"><label>Username</label><div style=font-weight:600>" + escMo(uname) + "</div></div>" +
+        "<div class=\"form-group\"><label>Display Name</label><input type=text id=\"moProfDisplayName\" value=\"" + escMo(dispName) + "\" style=width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;></div>" +
+        "<div class=\"form-group full\"><label>Email</label><input type=email id=\"moProfEmail\" value=\"" + escMo(email) + "\" style=width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;></div>" +
+        "<div class=\"form-group full\"><label style=color:var(--muted);font-size:0.78rem;>To update your password, contact an administrator.</label></div>" +
+        "</div>";
+}
+
+async function saveMoProfile() {
+    let csrf = moState.csrfToken || sessionStorage.getItem("csrfToken") || "";
+    let newName = document.getElementById("moProfDisplayName").value.trim();
+    let newEmail = document.getElementById("moProfEmail").value.trim();
+    showToast("Profile update via admin panel only — contact admin to change account details.", "info");
+}
+
+function escMo(s) {
+    if (!s) return "";
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function escMoAttr(s) {
+    if (!s) return "";
+    return String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+}
+
+async function openMoTaMsg(applicantId, displayName, context) {
+    moState.selectedTaApplicantId = applicantId;
+    moState.selectedTaContext = context || "accepted";
+    document.getElementById("moMsgCard").style.display = "block";
+    document.getElementById("moMsgCardTitle").textContent = "Messages · " + displayName;
+    let statusEl = document.getElementById("moMsgCardStatus");
+    let hintEl = document.getElementById("moMsgHint");
+    if (context === "pending") {
+        statusEl.style.display = "inline-block";
+        statusEl.className = "status-chip status-review";
+        statusEl.textContent = "Pending Applicant";
+        hintEl.textContent = "This applicant is pending review. You can message them here.";
+    } else {
+        statusEl.style.display = "inline-block";
+        statusEl.className = "status-chip status-accepted";
+        statusEl.textContent = "My TA";
+        hintEl.textContent = "Your accepted TA. Manage via Messages.";
+    }
+    document.getElementById("moMsgBody").value = "";
+    await loadMoTaThread();
+    let p = new URLSearchParams();
+    p.append("_csrf", moState.csrfToken || sessionStorage.getItem("csrfToken") || "");
+    p.append("applicantId", applicantId);
+    await fetch("api/markMoTaRead", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: p, credentials: "same-origin" });
+    refreshMoUnread();
+}
+
+function closeMoMsgCard() {
+    document.getElementById("moMsgCard").style.display = "none";
+    moState.selectedTaApplicantId = null;
+    if (moState.selectedTaContext === "pending") {
+        loadPendingApplicants();
+    } else {
+        loadMyTas();
+    }
+}
+
+async function loadMoTaThread() {
+    let aid = moState.selectedTaApplicantId;
+    let box = document.getElementById("moMsgThread");
+    if (!aid || !box) return;
+    try {
+        let res = await fetch("api/moTaMessages?applicantId=" + encodeURIComponent(aid), { credentials: "same-origin" });
+        let j = await res.json();
+        if (!j.success) { box.innerHTML = "<span style=color:var(--accent)>" + escMo(j.message || "Error") + "</span>"; return; }
+        let msgs = j.messages || [];
+        if (!msgs.length) box.innerHTML = "<span style=color:var(--muted)>No messages yet.</span>";
+        else box.innerHTML = msgs.map(function(m) {
+            let who = m.fromDisplayName || m.fromUsername;
+            let t = m.sentAt || "";
+            let bubble = m.fromRole === "MO" ? "background:#e3f2fd;border-radius:8px;padding:8px 10px;margin:6px 0 6px 20px;" : "background:#e6f5f3;border-radius:8px;padding:8px 10px;margin:6px 20px 6px 0;";
+            return "<div style=\"" + bubble + "\"><div style=font-size:0.72rem;color:var(--muted)><strong>" + escMo(who) + "</strong> · " + escMo(t) + "</div><div style=margin-top:4px;white-space:pre-wrap>" + escMo(m.body) + "</div></div>";
+        }).join("");
+        box.scrollTop = box.scrollHeight;
+    } catch (e) { box.innerHTML = "Error"; }
+}
+
+async function sendMoTaMessage() {
+    let aid = moState.selectedTaApplicantId;
+    let body = document.getElementById("moMsgBody").value.trim();
+    if (!aid || !body) return;
+    let p = new URLSearchParams();
+    p.append("_csrf", moState.csrfToken || sessionStorage.getItem("csrfToken") || "");
+    p.append("applicantId", aid);
+    p.append("body", body);
+    try {
+        let res = await fetch("api/moTaMessage", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: p, credentials: "same-origin" });
+        let j = await res.json();
+        if (j.success) {
+            document.getElementById("moMsgBody").value = "";
+            await loadMoTaThread();
+            showToast("Sent", "success");
+        } else showToast(j.message || "Failed", "error");
+    } catch (e) { showToast("Failed", "error"); }
+}
+
+function moEditApplicant(applicantId) {
+    let row = moState.myTas.find(function(r) { return r.applicantId === applicantId; });
+    let p = row && row.applicant ? row.applicant : {};
+    let skillsStr = (p.skills || []).join(", ");
+    let html = "<label>Name</label><input id=\"moApName\" type=\"text\" value=\"" + escMo(p.name || "") + "\"/>" +
+        "<label>Email</label><input id=\"moApEmail\" type=\"email\" value=\"" + escMo(p.email || "") + "\"/>" +
+        "<label>Year of study</label><input id=\"moApYear\" type=\"text\" value=\"" + escMo(p.yearOfStudy || "") + "\"/>" +
+        "<label>GPA</label><input id=\"moApGpa\" type=\"text\" value=\"" + (p.gpa != null ? p.gpa : "") + "\"/>" +
+        "<label>Hours / week</label><input id=\"moApHours\" type=\"number\" value=\"" + (p.hoursAvailable != null ? p.hoursAvailable : "") + "\"/>" +
+        "<label>Skills (comma)</label><textarea id=\"moApSkills\">" + escMo(skillsStr) + "</textarea>" +
+        "<div class=\"modal-actions\"><button type=button class=\"btn btn-outline\" onclick=\"closeModal()\">Cancel</button>" +
+        "<button type=button class=\"btn btn-primary\" onclick=\"submitMoApplicant('" + escMoAttr(applicantId) + "')\">Save</button></div>";
+    openModal("Edit TA profile · " + applicantId, html);
+}
+
+async function submitMoApplicant(applicantId) {
+    let p = new URLSearchParams();
+    p.append("_csrf", moState.csrfToken || sessionStorage.getItem("csrfToken") || "");
+    p.append("op", "update");
+    p.append("applicantId", applicantId);
+    p.append("name", document.getElementById("moApName").value.trim());
+    p.append("email", document.getElementById("moApEmail").value.trim());
+    p.append("yearOfStudy", document.getElementById("moApYear").value.trim());
+    p.append("gpa", document.getElementById("moApGpa").value.trim());
+    p.append("hoursAvailable", document.getElementById("moApHours").value.trim());
+    p.append("skills", document.getElementById("moApSkills").value.trim());
+    try {
+        let res = await fetch("api/moApplicant", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: p, credentials: "same-origin" });
+        let j = await res.json();
+        if (j.success) { closeModal(); showToast("Saved", "success"); loadMyTas(); }
+        else showToast(j.message || "Failed", "error");
+    } catch (e) { showToast("Failed", "error"); }
+}
+
+async function moRetractTa(applicantId) {
+    if (!(await showMoConfirm("Retract acceptance for this TA on your module(s)? Slots will be freed.", "Retract acceptance"))) return;
+    let row = moState.myTas.find(function(r) { return r.applicantId === applicantId; });
+    let apps = row && row.acceptedApplications ? row.acceptedApplications : [];
+    let csrf = moState.csrfToken || sessionStorage.getItem("csrfToken") || "";
+    for (let i = 0; i < apps.length; i++) {
+        let p = new URLSearchParams();
+        p.append("_csrf", csrf);
+        p.append("applicationId", apps[i].id);
+        p.append("status", "Rejected");
+        let res = await fetch("api/updateStatus", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: p, credentials: "same-origin" });
+        let j = await res.json();
+        if (!j.success) { showToast(j.message || "Retract failed", "error"); await loadAll(); loadMyTas(); return; }
+    }
+    showToast("Retracted", "success");
+    await loadAll();
+    loadMyTas();
+    closeMoMsgCard();
 }
 
 function openModal(title, body) {
