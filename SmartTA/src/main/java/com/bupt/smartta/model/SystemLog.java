@@ -42,6 +42,10 @@ public class SystemLog implements Serializable {
     private String status;
     /** Additional detail text (may be null). */
     private String detail;
+    private String level;
+    private String userId;
+    private String ipAddress;
+    private String sessionId;
 
     /**
      * Default constructor required for Jackson deserialization.
@@ -60,6 +64,7 @@ public class SystemLog implements Serializable {
         this.operation = operation;
         this.fileName = fileName;
         this.status = status;
+        this.level = LEVEL_INFO; // 默认日志级别为INFO
     }
 
     /**
@@ -75,6 +80,11 @@ public class SystemLog implements Serializable {
         this.detail = detail;
     }
 
+    public SystemLog(String operation, String fileName, String status, String detail, String level) {
+        this(operation, fileName, status, detail);
+        this.level = level;
+    }
+
     public String getTimestamp() { return timestamp; }
     public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
     public String getOperation() { return operation; }
@@ -85,6 +95,14 @@ public class SystemLog implements Serializable {
     public void setStatus(String status) { this.status = status; }
     public String getDetail() { return detail; }
     public void setDetail(String detail) { this.detail = detail; }
+    public String getLevel() { return level; }
+    public void setLevel(String level) { this.level = level; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+    public String getIpAddress() { return ipAddress; }
+    public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 
     /**
      * Returns a single-character icon for the operation type.
