@@ -8,18 +8,18 @@
     {"username": "limei", "password": "ta123", "role": "TA", "displayName": "Li Mei"}
   ],
   "versionHistory": [
-    {"version": "3.0", "date": "2026-04-10", "title": "Final Assessment & QA", "description": "MO: download TA CV, accept/reject TA, my profile; TA: My Positions, MO Messages channel; full data sync; automated unit test suite (JUnit 5, 162 tests passing)"},
+    {"version": "3.0", "date": "2026-04-10", "title": "Final Assessment & QA", "description": "MO: download TA CV, accept/reject TA, my profile; TA: My Positions, MO Messages channel, workload rebalancing UI; full data sync; automated unit test suite (JUnit 5, 162 tests passing)"},
     {"version": "2.0", "date": "2026-04-05", "title": "Mid-Term Assessment", "description": "JSON file persistence, REST API, AI scoring engine, system log viewer, Workload Monitor, MoSCoW traceability matrix"},
     {"version": "1.1", "date": "2026-03-29", "title": "Working Software v1", "description": "Role-based dashboards, static data, mock file-save feedback, form validation"},
     {"version": "1.0", "date": "2026-03-22", "title": "First Assessment", "description": "Product backlog, low-fidelity HTML prototype, brief report, stakeholder interviews, user stories"}
   ],
   "featureCoverage": [
-    {"icon": "&#10003;", "text": "TA: profile, CV, apply, track"},
-    {"icon": "&#10003;", "text": "MO: post job, rank, accept/reject, download CV"},
+    {"icon": "&#10003;", "text": "TA: profile, CV, apply, track, my positions"},
+    {"icon": "&#10003;", "text": "MO: post job, rank, accept/reject, download CV, my profile"},
     {"icon": "&#10003;", "text": "Admin: workload, logs, file status"},
-    {"icon": "&#10003;", "text": "AI: skill matching, gap analysis"},
+    {"icon": "&#10003;", "text": "AI: skill matching, gap analysis, workload rebalancing"},
+    {"icon": "&#10003;", "text": "Messaging: MO\u2194TA in-system message channel"},
     {"icon": "&#10003;", "text": "Persistence: JSON file I/O"},
-    {"icon": "&#10003;", "text": "Traceability matrix"},
     {"icon": "&#10003;", "text": "Unit tests: 162 tests passing"}
   ],
   "fileStatusConfig": [
@@ -27,9 +27,12 @@
     {"filename": "applicants.json", "displayName": "Applicants", "category": "Academic Data"},
     {"filename": "applications.json", "displayName": "Applications", "category": "Academic Data"},
     {"filename": "workloads.json", "displayName": "Workloads", "category": "Academic Data"},
+    {"filename": "mota_messages.json", "displayName": "MO\u2192TA Messages", "category": "Academic Data"},
+    {"filename": "workload_suggestion.json", "displayName": "Workload Suggestion", "category": "Academic Data"},
     {"filename": "system_logs.json", "displayName": "System Logs", "category": "System Data"},
     {"filename": "users.json", "displayName": "Users", "category": "System Data"},
-    {"filename": "system_config.json", "displayName": "System Config", "category": "System Data"}
+    {"filename": "system_config.json", "displayName": "System Config", "category": "System Data"},
+    {"filename": "cv_uploads/", "displayName": "CV Uploads", "category": "File Storage"}
   ],
   "workloadConfig": {
     "capacity": 20,
@@ -54,6 +57,8 @@
     "workloads": "workloads.json",
     "users": "users.json",
     "logs": "system_logs.json",
+    "motaMessages": "mota_messages.json",
+    "workloadSuggestion": "workload_suggestion.json",
     "cvs": "cv_uploads/"
   }
 }

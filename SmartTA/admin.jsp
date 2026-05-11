@@ -319,10 +319,11 @@ tr:last-child td { border-bottom:none; }
             <div class="ai-badge">AI WORKLOAD BALANCER</div>
             <h3>Rebalancing Recommendation</h3>
             <div id="aiSuggestion" class="ai-suggestion">Loading...</div>
-            <div style="display:flex;gap:8px;margin-top:14px">
-                <button class="btn btn-success" style="flex:1" onclick="applySuggestion()">Apply Suggestion</button>
+            <div style="display:flex;gap:8px;margin-top:14px" id="aiBalancerActions">
+                <button class="btn btn-success" style="flex:1" onclick="generateSuggestion()">Generate Suggestion</button>
                 <button class="btn btn-outline" style="flex:1" onclick="dismissSuggestion()">Dismiss</button>
             </div>
+            <div id="aiSuggestionDetail" style="display:none;margin-top:12px;padding:10px;background:var(--primary-soft);border-radius:8px;font-size:0.82rem;line-height:1.55;color:var(--primary-dark)"></div>
         </div>
         <div class="sidebar-card">
             <h3>System Overview</h3>
@@ -518,7 +519,7 @@ async function loadSystemConfig() {
             if (vb && systemConfig.appVersion) {
                 vb.textContent = "v" + systemConfig.appVersion;
             }
-            // 不再重复调用 loadWorkload()，由 loadAll() 中的 Promise.all 统一管理
+            // No longer call loadWorkload() here; loadAll()'s Promise.all manages it uniformly
         }
     } catch(e) {
         console.warn("[SmartTA] Failed to load system config:", e);
@@ -632,8 +633,14 @@ function showUserProfileModal(username) {
         body += "<p style=\"font-size:0.82rem;margin-top:6px\">Skills: " + escHtml((p.skills || []).join(", ")) + "</p>";
         if (p.createdAt) body += "<p style=\"font-size:0.75rem;color:var(--muted);margin-top:8px\">Record created: " + escHtml(p.createdAt) + "</p>";
         if (isTaRole) {
+            if (p.cvFileName) {
+                body += "<div style=\"margin-top:12px\">" +
+                    "<a class=\"btn btn-primary btn-sm\" target=\"_blank\" rel=\"noopener\" href=\"download?applicantId=" + encodeURIComponent(p.id) + "\">Download TA CV</a></div>";
+            } else {
+                body += "<div style=\"margin-top:12px;color:var(--muted);font-size:0.78rem\">No CV uploaded</div>";
+            }
             body += "<div style=\"margin-top:12px\">" +
-                "<a class=\"btn btn-primary btn-sm\" target=\"_blank\" rel=\"noopener\" href=\"download?applicantId=" + encodeURIComponent(p.id) + "\">Download applicant's CV</a></div>";
+                "<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"closeAdminModal();openApplicantEditModal('" + escAttr(p.id) + "')\">Edit applicant profile</button></div>";
         } else {
             if (p.cvFileName) body += "<p style=\"margin-top:10px\"><a class=\"btn btn-primary btn-sm\" target=\"_blank\" rel=\"noopener\" href=\"download?applicantId=" + encodeURIComponent(p.id) + "\">Download TA CV</a></p>";
             body += "<div style=\"margin-top:12px\">" +
@@ -676,7 +683,7 @@ function openUserModal(username) {
 }
 
 async function submitUserForm(isUpdate) {
-    // 必须用 x-www-form-urlencoded：multipart FormData 在未配置 @MultipartConfig 时 getParameter("op") 为 null，会报 Unknown op
+    // Must use x-www-form-urlencoded: multipart FormData without @MultipartConfig causes getParameter("op") to be null, resulting in Unknown op
     let p = new URLSearchParams();
     p.append("_csrf", adminCsrfToken || sessionStorage.getItem("csrfToken") || "");
     p.append("op", isUpdate ? "update" : "create");
@@ -818,12 +825,12 @@ async function deleteApplicantConfirm(applicantId) {
 
 async function loadWorkload() {
     try {
-        // 优先使用 workloadEntries 端点（返回完整结构化数据）
+        // Prefer workloadEntries endpoint (returns full structured data)
         let res = await fetch("api/workloadEntries");
         let json = await res.json();
         let entries = json.workloadEntries;
         if (!entries || !entries.length) {
-            // 回退：从 workloads 原始数据构建 entries
+            // Fallback: build entries from raw workloads data
             let w = json.workloads || {};
             entries = Object.keys(w).map(function(k) {
                 return { applicantId: k, username: "", taName: k, hours: w[k] };
@@ -836,7 +843,8 @@ async function loadWorkload() {
 
 async function loadRecruitment() {
     try {
-        let [posRes, appRes] = await Promise.all([fetch("api/positions"), fetch("api/applications")]);
+        // Use unfiltered allPositions endpoint to ensure admin can see all modules' summary
+        let [posRes, appRes] = await Promise.all([fetch("api/allPositions"), fetch("api/applications")]);
         let posJson = await posRes.json();
         let appJson = await appRes.json();
         renderRecruitmentTable(posJson.positions || [], appJson.applications || []);
@@ -896,14 +904,15 @@ function renderAiSuggestion(entries) {
         container.innerHTML = "<strong>All TAs within safe workload range.</strong><br/>No rebalancing needed at this time.";
         document.getElementById("aiBalancerPanel").classList.remove("green");
         document.getElementById("aiBalancerPanel").style.background = "linear-gradient(135deg,#264653,#2a9d8f)";
+        document.getElementById("aiSuggestionDetail").style.display = "none";
     } else {
         let names = overloaded.map(function(e) {
             let u = (e.username && String(e.username).trim()) ? "@" + e.username : (e.taName || e.applicantId);
             return u + " (" + e.hours + "h)";
         }).join(", ");
         container.innerHTML = `<strong>Issue detected:</strong> ${names} exceed the ${CAPACITY}-hour limit.<br/><br/>
-            <strong>DeepSeek AI analysis:</strong> Clicking "Apply Suggestion" will invoke the DeepSeek API to generate a precise rebalancing plan for the overloaded TA(s).<br/><br/>
-            <strong>Fallback:</strong> If AI is unavailable, a fixed rule is used (reduce by 4h).`;
+            <strong>AI recommendation:</strong> The AI will generate a suggestion for which position the overloaded TA should give up. The TA must then confirm the change on their dashboard.<br/><br/>
+            <strong>Note:</strong> Workload will only be adjusted after the TA confirms.`;
     }
 }
 
@@ -917,8 +926,8 @@ function renderRecruitmentTable(positions, apps) {
         let posApps = apps.filter(a => a.positionCode === pos.code);
         let accepted = posApps.filter(a => a.status === "Accepted").length;
         let remaining = pos.remainingSlots;
-        let statusClass = pos.isOpen ? "status-open" : "status-closed";
-        let statusText = pos.isOpen ? "Open" : "Closed";
+        let statusClass = pos.open ? "status-open" : "status-closed";
+        let statusText = pos.open ? "Open" : "Closed";
         return `<tr>
             <td><strong>${pos.code}</strong> — ${pos.name}</td>
             <td>${posApps.length}</td>
@@ -953,8 +962,8 @@ function renderLogs(logs) {
     }).join("");
 }
 
-async function applySuggestion() {
-    if (!(await showAppConfirm("Are you sure you want to apply the AI workload rebalancing suggestion?", "Apply suggestion"))) return;
+async function generateSuggestion() {
+    if (!(await showAppConfirm("Generate a workload rebalancing suggestion? The TA will receive a notification and must confirm the change.", "Generate Suggestion"))) return;
     let btn = document.querySelector(".ai-panel .btn-success");
     if (btn) btn.disabled = true;
     let p = new URLSearchParams();
@@ -968,22 +977,25 @@ async function applySuggestion() {
         .then(r => r.json())
         .then(json => {
             if (json.success) {
-                let msg = json.message || "Workload rebalanced successfully!";
                 if (json.ai) {
-                    // DeepSeek AI 返回的建议
-                    showToast("AI: " + msg, "success");
+                    let detail = document.getElementById("aiSuggestionDetail");
+                    detail.style.display = "block";
+                    detail.innerHTML = "<strong>Suggestion sent to TA:</strong> " + escHtml(json.targetDisplayName || json.targetApplicantId) +
+                        " &rarr; remove position <strong>" + escHtml(json.targetPositionCode || "") + " (" + escHtml(json.targetPositionName || "") + ")</strong>." +
+                        (json.targetHoursDelta != null ? " Saves " + json.targetHoursDelta + "h/week." : "") +
+                        "<br/><em>" + escHtml(json.reasoning || json.message || "") + "</em>";
+                    showToast("Suggestion sent to TA. They must confirm the change.", "success");
                 } else {
-                    showToast("Rebalanced (fallback): " + msg, "info");
+                    showToast(json.message || "No suggestion generated.", "info");
                 }
                 loadWorkload();
             } else {
-                showToast(json.message || "Rebalance failed", "error");
+                showToast(json.message || "Failed to generate suggestion", "error");
             }
         })
         .catch(e => showToast("Error: " + e.message, "error"))
         .finally(() => {
             if (btn) btn.disabled = false;
-            loadWorkload();
         });
 }
 

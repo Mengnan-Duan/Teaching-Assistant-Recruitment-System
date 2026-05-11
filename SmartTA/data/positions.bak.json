@@ -1,0 +1,17 @@
+[ {
+  "code" : "EBU6475",
+  "name" : "Microprocessor Systems Design",
+  "requiredSkills" : [ "Embeded Hardware" ],
+  "hoursPerWeek" : 8,
+  "totalSlots" : 2,
+  "filledSlots" : 0,
+  "deadline" : "2026-04-30",
+  "description" : "",
+  "postedBy" : "J.Loo",
+  "postedByUsername" : "johnson",
+  "postedAt" : "2026-04-11",
+  "status" : "Open",
+  "open" : true,
+  "requiredSkillsStr" : "Embeded Hardware",
+  "remainingSlots" : 2
+} ]

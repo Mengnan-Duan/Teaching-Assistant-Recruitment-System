@@ -1,0 +1,15 @@
+[ {
+  "id" : "A001_EBU6475",
+  "applicantId" : "A001",
+  "applicantName" : "Zhang San",
+  "positionCode" : "EBU6475",
+  "positionName" : "Microprocessor Systems Design",
+  "appliedAt" : "2026-04-11",
+  "status" : "Under Review",
+  "aiScore" : 0,
+  "skillScore" : 0,
+  "gpaScore" : 0,
+  "availScore" : 0,
+  "aiExplanation" : "Composite score: 0/100\r\nFormula: 0.4×Skill + 0.3×GPA + 0.3×Availability",
+  "llmExplanation" : ""
+} ]

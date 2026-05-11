@@ -1,1 +1,8 @@
-[{"timestamp":"2026-04-10 17:29:46","operation":"WRITE","fileName":"positions.json","status":"OK","detail":null},{"timestamp":null,"operation":"WRITE","fileName":null,"status":"OK","detail":""},{"timestamp":null,"operation":"READ","fileName":null,"status":"OK","detail":""},{"timestamp":null,"operation":"READ","fileName":null,"status":"OK","detail":""}]
+[ {
+  "timestamp" : "2026-04-12 00:58:41",
+  "operation" : "READ",
+  "fileName" : "positions.json",
+  "status" : "OK",
+  "detail" : null,
+  "opIcon" : "R"
+} ]

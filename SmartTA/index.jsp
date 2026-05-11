@@ -207,19 +207,6 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 .form-footer a { color:var(--primary); text-decoration:none; font-weight:600; cursor:pointer; }
 .form-footer a:hover { text-decoration:underline; }
 
-.demo-accounts {
-    margin-top:24px; padding:14px 16px;
-    background:#f0f4f8; border-radius:var(--radius-sm);
-    border:1px dashed var(--border);
-}
-.demo-accounts h4 { font-size:0.75rem; font-weight:700; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em; }
-.demo-account {
-    display:flex; justify-content:space-between; align-items:center;
-    padding:5px 0; font-size:0.78rem;
-}
-.demo-account .demo-role { font-weight:700; color:var(--primary); }
-.demo-account .demo-creds { color:var(--muted); font-family:monospace; font-size:0.72rem; }
-
 .error-box {
     display:none; padding:12px 16px; border-radius:var(--radius-sm);
     background:var(--accent-soft); border-left:4px solid var(--accent);
@@ -297,7 +284,7 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
             <button class="form-toggle-btn" id="btn-register" onclick="showRegister()">Register</button>
         </div>
 
-        <!-- ERROR / SUCCESS (同一位置，互斥显示) -->
+        <!-- ERROR / SUCCESS (same position, mutually exclusive) -->
         <div class="error-box" id="errorBox">
             <span>&#9888;&#65039;</span>
             <span id="errorMsg"></span>
@@ -422,14 +409,6 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
         <div class="form-footer">
             <span id="footerText">Don't have an account? <a onclick="showRegister()">Register here</a></span>
         </div>
-
-        <!-- Demo accounts (loaded from backend via /api/config) -->
-        <div class="demo-accounts" id="demoSection">
-            <h4>Demo Accounts</h4>
-            <div id="demoAccountsList">
-                <div style="font-size:0.78rem;color:var(--muted);padding:8px 0;">Loading demo accounts...</div>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -445,32 +424,16 @@ function clearRegisterForm() {
     });
 }
 var APP_CTX = "<%= request.getContextPath() %>";
-// Load system config (demo accounts, version) from backend on page load
 (async function() {
     try {
         let res = await fetch(APP_CTX + "/api?action=config");
         if (res.ok) {
             let cfg = await res.json();
-            // Version badge
             if (cfg.appVersion) {
                 let vb = document.getElementById("versionBadge");
                 if (vb) vb.textContent = "v" + cfg.appVersion;
                 let bv = document.getElementById("brandVersion");
-                if (bv) bv.textContent = "Smart-TA v" + cfg.appVersion + " \u00b7 Mid-Term Demo";
-            }
-            // P0-9: 不暴露明文密码，仅显示用户名和角色
-            if (cfg.demoAccounts && cfg.demoAccounts.length > 0) {
-                let list = document.getElementById("demoAccountsList");
-                if (list) {
-                    list.innerHTML = "";
-                    cfg.demoAccounts.forEach(function(a) {
-                        let div = document.createElement("div");
-                        div.className = "demo-account";
-                        div.innerHTML = '<span class="demo-role">' + (a.role || '') + '</span>' +
-                            '<span class="demo-creds">' + (a.username || '') + '</span>';
-                        list.appendChild(div);
-                    });
-                }
+                if (bv) bv.textContent = "Smart-TA v" + cfg.appVersion;
             }
         }
     } catch(e) {
@@ -479,7 +442,7 @@ var APP_CTX = "<%= request.getContextPath() %>";
 })();
 
 // ---- Form toggle ----
-/** @param opts {{keepSuccess?:boolean}} 注册成功后切到登录页时保留绿色成功条 */
+/** @param opts {{keepSuccess?:boolean}} Keep the green success bar when switching to login page after successful registration */
 function showLogin(opts) {
     var keepSuccess = opts && opts.keepSuccess;
     document.getElementById("loginForm").style.display = "flex";
@@ -585,7 +548,7 @@ async function doLogin() {
         }
 
         if (json.success) {
-            // 保存 session 数据供后续页面使用
+            // Save session data for subsequent pages
             sessionStorage.setItem("csrfToken", json.csrfToken || "");
             // Redirect to the appropriate dashboard based on role
             let redirectUrl = "ta.jsp";

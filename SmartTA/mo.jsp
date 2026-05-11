@@ -337,7 +337,9 @@ tr:last-child td { border-bottom:none; }
             <div class="card-section">
                 <div class="section-header">
                     <h2>My Profile</h2>
-                    <button class="btn btn-primary btn-sm" onclick="saveMoProfile()">Save Changes</button>
+                    <button class="btn btn-primary btn-sm" id="moProfEditBtn" onclick="enterMoEditMode()">Edit</button>
+                    <button class="btn btn-outline btn-sm" id="moProfCancelBtn" style="display:none" onclick="cancelMoEdit()">Cancel</button>
+                    <button class="btn btn-primary btn-sm" id="moProfSaveBtn" style="display:none" onclick="saveMoProfile()">Save Changes</button>
                 </div>
                 <div id="moProfileDisplay" style="margin-bottom:20px;"></div>
             </div>
@@ -983,7 +985,7 @@ function renderQuotas() {
     let html = "";
     myPositions.forEach(p => {
         let pct = p.totalSlots > 0 ? (p.filledSlots / p.totalSlots * 100) : 0;
-        let fillClass = p.isOpen ? "open" : "closed";
+        let fillClass = p.open ? "open" : "closed";
         let pendingTotal = moState.quotaChanges[p.code];
         let displayTotal = pendingTotal !== undefined ? pendingTotal : p.totalSlots;
         let isModified = pendingTotal !== undefined;
@@ -1153,8 +1155,8 @@ function renderPendingApplicants() {
         let tap = row.applicant || {};
         let name = tap.name || row.taDisplayName || app.applicantName || row.applicantId || "";
         let cvBtn = tap.cvFileName
-            ? "<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"downloadPendingCv('" + escMoAttr(row.applicantId) + "','" + escMoAttr(name) + "')\">Download CV</button>"
-            : "<button type=\"button\" class=\"btn btn-primary btn-sm\" disabled title=\"No CV uploaded\">Download CV</button>";
+            ? "<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"downloadPendingCv('" + escMoAttr(app.applicantId) + "','" + escMoAttr(name) + "')\">Download CV</button>"
+            : "<button type=\"button\" class=\"btn btn-outline btn-sm\" onclick=\"downloadPendingCv('" + escMoAttr(app.applicantId) + "','" + escMoAttr(name) + "')\">Download CV</button>";
         let accDis = (app.status === "Accepted") ? "disabled" : "";
         let rejDis = (app.status === "Rejected") ? "disabled" : "";
         let rankColor = (idx === 0) ? "var(--success)" : "var(--ink)";
@@ -1170,7 +1172,7 @@ function renderPendingApplicants() {
         html += "<td style=\"white-space:nowrap\">" + cvBtn + " ";
         html += "<button type=\"button\" class=\"btn btn-accept btn-sm\" onclick=\"updatePendingStatus('" + escMoAttr(app.id) + "','Accepted')\" " + accDis + ">Accept</button> ";
         html += "<button type=\"button\" class=\"btn btn-reject btn-sm\" onclick=\"updatePendingStatus('" + escMoAttr(app.id) + "','Rejected')\" " + rejDis + ">Reject</button> ";
-        html += "<button type=\"button\" class=\"btn btn-outline btn-sm\" onclick=\"openMoTaMsg('" + escMoAttr(row.applicantId) + "','" + escMoAttr(name) + "','pending')\">Messages</button>";
+        html += "<button type=\"button\" class=\"btn btn-outline btn-sm\" onclick=\"openMoTaMsg('" + escMoAttr(app.applicantId) + "','" + escMoAttr(name) + "','pending')\">Messages</button>";
         html += "</td></tr>";
     });
     html += "</tbody></table>";
@@ -1212,26 +1214,95 @@ async function updatePendingStatus(appId, status) {
     }
 }
 
-function loadMoProfile() {
+var _moProfileOrig = {}; // 存储编辑前的原始值
+
+async function loadMoProfile() {
+    try {
+        let res = await fetch("api/moProfile", { credentials: "same-origin" });
+        let json = await res.json();
+        if (!json.success && !json.username) {
+            renderMoProfileRead(null);
+            return;
+        }
+        // 更新 session 中的数据
+        if (moState.session) {
+            moState.session.displayName = json.displayName || "";
+            moState.session.email = json.email || "";
+        }
+        renderMoUserInfo();
+        renderMoProfileRead(json);
+    } catch(e) {
+        document.getElementById("moProfileDisplay").innerHTML =
+            '<p style="color:var(--accent)">Failed to load profile.</p>';
+    }
+}
+
+function renderMoProfileRead(data) {
     let el = document.getElementById("moProfileDisplay");
-    let s = moState.session || {};
-    let dispName = s.displayName || "";
-    let email = s.email || "";
-    let uname = s.username || "";
+    let uname = data ? data.username : (moState.session ? moState.session.username : "");
+    let dispName = data ? (data.displayName || "") : "";
+    let email = data ? (data.email || "") : "";
     el.innerHTML =
         "<div class=\"form-grid\">" +
         "<div class=\"form-group\"><label>Username</label><div style=font-weight:600>" + escMo(uname) + "</div></div>" +
+        "<div class=\"form-group\"><label>Display Name</label><div>" + escMo(dispName) + "</div></div>" +
+        "<div class=\"form-group full\"><label>Email</label><div>" + escMo(email) + "</div></div>" +
+        "<div class=\"form-group full\"><label style=color:var(--muted);font-size:0.78rem;>To update your password, contact an administrator.</label></div>" +
+        "</div>";
+    exitMoEditMode();
+}
+
+function enterMoEditMode() {
+    let dispName = moState.session ? (moState.session.displayName || "") : "";
+    let email = moState.session ? (moState.session.email || "") : "";
+    _moProfileOrig = { displayName: dispName, email: email };
+    let el = document.getElementById("moProfileDisplay");
+    el.innerHTML =
+        "<div class=\"form-grid\">" +
+        "<div class=\"form-group\"><label>Username</label><div style=font-weight:600>" + escMo(moState.session ? moState.session.username : "") + "</div></div>" +
         "<div class=\"form-group\"><label>Display Name</label><input type=text id=\"moProfDisplayName\" value=\"" + escMo(dispName) + "\" style=width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;></div>" +
         "<div class=\"form-group full\"><label>Email</label><input type=email id=\"moProfEmail\" value=\"" + escMo(email) + "\" style=width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;></div>" +
         "<div class=\"form-group full\"><label style=color:var(--muted);font-size:0.78rem;>To update your password, contact an administrator.</label></div>" +
         "</div>";
+    document.getElementById("moProfEditBtn").style.display = "none";
+    document.getElementById("moProfCancelBtn").style.display = "";
+    document.getElementById("moProfSaveBtn").style.display = "";
+}
+
+function cancelMoEdit() {
+    renderMoProfileRead(null);
+}
+
+function exitMoEditMode() {
+    document.getElementById("moProfEditBtn").style.display = "";
+    document.getElementById("moProfCancelBtn").style.display = "none";
+    document.getElementById("moProfSaveBtn").style.display = "none";
 }
 
 async function saveMoProfile() {
     let csrf = moState.csrfToken || sessionStorage.getItem("csrfToken") || "";
     let newName = document.getElementById("moProfDisplayName").value.trim();
     let newEmail = document.getElementById("moProfEmail").value.trim();
-    showToast("Profile update via admin panel only — contact admin to change account details.", "info");
+    let p = new URLSearchParams();
+    p.append("_csrf", csrf);
+    p.append("displayName", newName);
+    p.append("email", newEmail);
+    try {
+        let res = await fetch("api/moProfile", {
+            method: "POST",
+            body: p,
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        if (json.success) {
+            showToast("Profile saved successfully", "success");
+            await loadMoProfile();
+        } else {
+            showToast(json.message || "Failed to save profile", "error");
+        }
+    } catch(e) {
+        showToast("Error: " + e.message, "error");
+    }
 }
 
 function escMo(s) {

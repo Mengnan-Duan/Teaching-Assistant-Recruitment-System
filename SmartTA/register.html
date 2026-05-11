@@ -9,18 +9,26 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="css/smartta-shell.css"/>
 <style>
-:root{--ink:#1a1a2e;--surface:#f8f7f4;--card:#fff;--accent:#e63946;--primary:#457b9d;--primary-dark:#1d3557;--primary-soft:#e8f0f6;--muted:#8d99ae;--border:#e0ddd8;--radius:14px;--shadow:0 4px 24px rgba(26,26,46,.10);--font:"DM Sans",sans-serif;--display:"Playfair Display",serif}
+:root{--ink:#1a1a2e;--surface:#f8f7f4;--card:#fff;--accent:#e63946;--primary:#457b9d;--primary-dark:#1d3557;--primary-soft:#e8f0f6;--muted:#8d99ae;--border:#e0ddd8;--radius:14px;--shadow:0 4px 24px rgba(26,26,46,.10);--font:"DM Sans",sans-serif;--display:"Playfair Display",serif;--success:#2e7d32;--success-bg:#e8f5e9;--success-border:#a5d6a7}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--font);color:var(--ink);min-height:100vh;display:flex;align-items:center;justify-content:center}
 .card{background:var(--card);border-radius:var(--radius);padding:40px 36px;width:100%;max-width:460px;box-shadow:var(--shadow)}
 h1{font-family:var(--display);font-size:1.9rem;color:var(--primary-dark);text-align:center;margin-bottom:4px}
 .subtitle{text-align:center;color:var(--muted);font-size:.88rem;margin-bottom:28px}
-.err-box{border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.85rem;display:none;background:#f8d7da;border:1.5px solid #f5c6cb;color:#721c24}
-.err-box.show{display:block}
+.msg-box{border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.85rem;display:none;background:#f8d7da;border:1.5px solid #f5c6cb;color:#721c24}
+.msg-box.show{display:block}
+.msg-box.success{background:var(--success-bg);border-color:var(--success-border);color:var(--success)}
 .field{text-align:left;margin-bottom:14px}
 .field label{display:block;font-size:.82rem;font-weight:600;margin-bottom:5px}
-.field input{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:.9rem;outline:none;transition:border-color .2s;background:#fff}
-.field input:focus{border-color:var(--primary)}
+.field label .required{color:var(--accent)}
+.field input{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:.9rem;outline:none;transition:border-color .2s, box-shadow .2s;background:#fff}
+.field input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(69,123,157,.15)}
+.field input.valid{border-color:var(--success);background:var(--success-bg)}
+.field input.invalid{border-color:var(--accent);background:#fff8f8}
+.field .hint{font-size:.75rem;color:var(--muted);margin-top:4px;display:none}
+.field .hint.show{display:block}
+.field .hint .invalid-icon{color:var(--accent);margin-right:4px}
+.field .hint .valid-icon{color:var(--success);margin-right:4px}
 .role-section{margin-bottom:14px}
 .role-section > label{display:block;font-size:.82rem;font-weight:600;margin-bottom:8px}
 .role-checkboxes{display:flex;gap:10px;flex-wrap:wrap}
@@ -30,6 +38,7 @@ h1{font-family:var(--display);font-size:1.9rem;color:var(--primary-dark);text-al
 .role-hint{color:var(--muted);font-size:.78rem;margin-top:4px}
 .btn{width:100%;padding:12px;border-radius:8px;font-family:var(--font);font-size:.92rem;font-weight:600;cursor:pointer;transition:.2s;border:none;background:var(--primary);color:#fff;margin-top:6px}
 .btn:hover{background:var(--primary-dark)}
+.btn:disabled{background:var(--muted);cursor:not-allowed}
 .switch-link{margin-top:16px;text-align:center;font-size:.82rem;color:var(--muted)}
 .switch-link a{color:var(--primary);font-weight:600;text-decoration:none}
 .switch-link a:hover{text-decoration:underline}
@@ -40,26 +49,38 @@ h1{font-family:var(--display);font-size:1.9rem;color:var(--primary-dark);text-al
   <h1>Create Account</h1>
   <p class="subtitle">Join Smart-TA · EBU6304 Group 37</p>
 
-  <div class="err-box" id="errBox"></div>
+  <div class="msg-box" id="msgBox"></div>
 
   <form id="regForm" action="auth" method="POST">
     <input type="hidden" name="action" value="register"/>
 
     <div class="field">
-      <label>Username *</label>
+      <label>Username <span class="required">*</span></label>
       <input type="text" name="username" id="username" placeholder="Choose a username" required/>
     </div>
+
     <div class="field">
-      <label>Password *</label>
+      <label>Email <span class="required">*</span></label>
+      <input type="email" name="email" id="email" placeholder="your.email@example.com" required autocomplete="email"/>
+      <p class="hint" id="emailHint">请输入有效的邮箱地址</p>
+    </div>
+
+    <div class="field">
+      <label>Display Name <span class="required">*</span></label>
+      <input type="text" name="displayName" id="displayName" placeholder="Your full name" required/>
+    </div>
+
+    <div class="field">
+      <label>Password <span class="required">*</span></label>
       <input type="password" name="password" id="password" placeholder="Create a password" required/>
     </div>
     <div class="field">
-      <label>Confirm Password *</label>
+      <label>Confirm Password <span class="required">*</span></label>
       <input type="password" name="confirm" id="confirm" placeholder="Re-enter password" required/>
     </div>
 
     <div class="role-section">
-      <label>Select your role(s) *</label>
+      <label>Select your role(s) <span class="required">*</span></label>
       <div class="role-checkboxes">
         <label><input type="checkbox" name="roles" value="TA"/> TA</label>
         <label><input type="checkbox" name="roles" value="MO"/> MO</label>
@@ -68,30 +89,87 @@ h1{font-family:var(--display);font-size:1.9rem;color:var(--primary-dark);text-al
       <p class="role-hint">One account, multiple roles. You can switch roles after login.</p>
     </div>
 
-    <button type="submit" class="btn">Create Account</button>
+    <button type="submit" class="btn" id="submitBtn">Create Account</button>
   </form>
 
   <p class="switch-link">Already have an account? <a href="login.html">Sign in</a></p>
 </div>
 
 <script>
-var errMap = {missing:'Please fill in all fields.',mismatch:'Passwords do not match.',taken:'Username already taken.',roles:'Please select at least one role.'};
+var errMap = {missing:'请填写所有必填项。',mismatch:'两次输入的密码不一致。',taken:'用户名已被占用。',roles:'请至少选择一个角色。',invalidemail:'邮箱格式无效，请检查后重试。'};
 var params = new URLSearchParams(window.location.search);
 var err = params.get('err');
 if (err && errMap[err]) {
-  document.getElementById('errBox').textContent = errMap[err];
-  document.getElementById('errBox').classList.add('show');
+  var msgBox = document.getElementById('msgBox');
+  msgBox.textContent = errMap[err];
+  msgBox.classList.add('show');
 }
+
+// 邮箱格式验证正则
+var emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+var emailInput = document.getElementById('email');
+var emailHint = document.getElementById('emailHint');
+var submitBtn = document.getElementById('submitBtn');
+
+// 邮箱实时验证
+emailInput.addEventListener('input', function() {
+  var email = this.value.trim();
+  if (email.length === 0) {
+    this.classList.remove('valid', 'invalid');
+    emailHint.classList.remove('show');
+    submitBtn.disabled = false;
+    return;
+  }
+  
+  if (emailRegex.test(email)) {
+    this.classList.remove('invalid');
+    this.classList.add('valid');
+    emailHint.innerHTML = '<span class="valid-icon">&#10003;</span>邮箱格式正确';
+    emailHint.classList.add('show');
+  } else {
+    this.classList.remove('valid');
+    this.classList.add('invalid');
+    emailHint.innerHTML = '<span class="invalid-icon">&#10007;</span>请输入有效的邮箱地址 (如: example@mail.com)';
+    emailHint.classList.add('show');
+  }
+});
+
+// 失去焦点时检查
+emailInput.addEventListener('blur', function() {
+  var email = this.value.trim();
+  if (email.length > 0 && !emailRegex.test(email)) {
+    this.classList.add('invalid');
+    emailHint.innerHTML = '<span class="invalid-icon">&#10007;</span>请输入有效的邮箱地址';
+    emailHint.classList.add('show');
+  }
+});
 
 document.getElementById('regForm').addEventListener('submit', function(e) {
   var pw = document.getElementById('password').value;
   var cf = document.getElementById('confirm').value;
+  var email = emailInput.value.trim();
+  var msgBox = document.getElementById('msgBox');
+  
+  // 检查密码匹配
   if (pw !== cf) {
     e.preventDefault();
-    var box = document.getElementById('errBox');
-    box.textContent = 'Passwords do not match.';
-    box.classList.add('show');
+    msgBox.textContent = '两次输入的密码不一致。';
+    msgBox.classList.remove('success');
+    msgBox.classList.add('show');
+    return;
   }
+  
+  // 检查邮箱格式
+  if (email.length > 0 && !emailRegex.test(email)) {
+    e.preventDefault();
+    msgBox.textContent = '请输入有效的邮箱地址。';
+    msgBox.classList.remove('success');
+    msgBox.classList.add('show');
+    emailInput.focus();
+    return;
+  }
+  
+  msgBox.classList.remove('show');
 });
 </script>
 </body>

@@ -244,6 +244,48 @@ textarea { resize:vertical; min-height:80px; }
     background:var(--success-soft); color:var(--success);
     padding:3px 10px; border-radius:100px; font-size:0.72rem; font-weight:700;
 }
+
+/* Workload warning modal */
+#workloadWarningOverlay {
+    display:none; position:fixed; inset:0; background:rgba(26,26,46,0.6);
+    z-index:9000; align-items:center; justify-content:center;
+    backdrop-filter:blur(4px);
+}
+#workloadWarningOverlay.show { display:flex; }
+#workloadWarningBox {
+    background:var(--card); border-radius:var(--radius); padding:32px;
+    width:90%; max-width:500px; box-shadow:0 20px 60px rgba(0,0,0,0.25);
+    animation:modalIn 0.2s ease;
+    border-top:5px solid var(--accent);
+}
+#workloadWarningBox h2 { font-family:var(--font-display); font-size:1.25rem; margin-bottom:12px; color:var(--accent); }
+#workloadWarningBox p { font-size:0.88rem; line-height:1.6; color:var(--ink); margin-bottom:8px; }
+#workloadWarningBox .reason-box {
+    background:var(--warn-soft); border-radius:var(--radius-sm);
+    padding:12px 16px; margin:12px 0; font-size:0.85rem; color:var(--ink);
+    line-height:1.55;
+}
+#workloadWarningBox .pos-highlight {
+    display:inline-block; background:var(--accent-soft); color:var(--accent);
+    padding:3px 10px; border-radius:6px; font-weight:700; font-size:0.9rem;
+    margin:4px 2px;
+}
+#workloadWarningBox .delta-badge {
+    display:inline-block; background:var(--success-soft); color:var(--success);
+    padding:2px 8px; border-radius:100px; font-size:0.78rem; font-weight:700;
+}
+#workloadWarningBox .btn-danger {
+    background:var(--accent); color:#fff; border:none; padding:10px 20px;
+    border-radius:var(--radius-sm); font-size:0.9rem; font-weight:700; cursor:pointer;
+    font-family:var(--font-body); transition:opacity 0.2s;
+}
+#workloadWarningBox .btn-danger:hover { opacity:0.85; }
+#workloadWarningBox .btn-outline-sm {
+    background:transparent; color:var(--muted); border:1.5px solid var(--border);
+    padding:10px 20px; border-radius:var(--radius-sm); font-size:0.9rem;
+    cursor:pointer; font-family:var(--font-body); transition:all 0.2s;
+}
+#workloadWarningBox .btn-outline-sm:hover { background:var(--surface); }
 </style>
 </head>
 <body class="smartta-shell">
@@ -326,13 +368,17 @@ textarea { resize:vertical; min-height:80px; }
                 <div id="skillsDisplay"></div>
                 <button class="btn btn-outline" style="margin-top:12px" onclick="addSkillPrompt()">+ Add Skill</button>
                 <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;" />
-                <button class="btn btn-primary" onclick="document.getElementById('cvInput').click()">Upload CV</button>
-                <input type="file" id="cvInput" accept=".pdf,.doc,.docx" style="display:none" onchange="handleCVUpload(this)" />
-                <p style="font-size:0.78rem;color:var(--muted);margin-top:8px">Accepted formats: PDF, DOC, DOCX</p>
+                <div id="cvSection">
+                    <div id="cvStatus" style="margin-bottom:10px"></div>
+                    <button id="btnUploadCv" class="btn btn-primary" onclick="document.getElementById('cvInput').click()">Upload CV</button>
+                    <button id="btnDeleteCv" class="btn btn-outline" style="margin-left:8px;color:var(--error);border-color:var(--error)" onclick="deleteCV()">Delete CV</button>
+                    <input type="file" id="cvInput" accept=".pdf,.doc,.docx" style="display:none" onchange="handleCVUpload(this)" />
+                </div>
+                <p style="font-size:0.78rem;color:var(--muted);margin-top:8px">Accepted formats: PDF, DOC, DOCX · Max 5MB</p>
             </div>
         </div>
 
-        <!-- MY POSITIONS: TA 已接受的岗位（绿色） -->
+        <!-- MY POSITIONS: TA's accepted positions (green) -->
         <div id="content-mypositions" style="display:none">
             <div class="card-section">
                 <div class="section-header">
@@ -407,6 +453,21 @@ textarea { resize:vertical; min-height:80px; }
         <div id="modalBody"></div>
     </div>
 </div>
+
+<!-- Workload Overload Warning Modal (shown to TA when AI suggests position removal) -->
+<div id="workloadWarningOverlay">
+    <div id="workloadWarningBox">
+        <h2>Workload Overload Warning</h2>
+        <p>Your current workload exceeds the safe limit. The system AI has analysed your positions and recommends the following adjustment:</p>
+        <div class="reason-box" id="workloadReasonBox"></div>
+        <p><strong>Position to remove:</strong> <span class="pos-highlight" id="workloadPosLabel"></span></p>
+        <p style="font-size:0.82rem;color:var(--muted)">You can choose to <strong>confirm removal</strong> to reduce your workload, or <strong>dismiss</strong> to keep it (not recommended).</p>
+        <div style="display:flex;gap:10px;margin-top:20px;">
+            <button type="button" class="btn-danger" id="workloadConfirmBtn" onclick="workloadWarningConfirm()">Confirm Removal</button>
+            <button type="button" class="btn-outline-sm" onclick="workloadWarningDismiss()">Dismiss</button>
+        </div>
+    </div>
+</div>
 <div id="toastContainer"></div>
 
 <script>
@@ -418,7 +479,8 @@ let state = {
     applicantId: null,
     skillSuggestions: [],
     taMoThreads: [],
-    selectedMoUsername: null
+    selectedMoUsername: null,
+    selectedMoStatus: null
 };
 
 function syntheticApplicant() {
@@ -448,6 +510,68 @@ function profileEmailMerged(a) {
     return ae || se;
 }
 
+// ============================================================
+// Workload Overload Warning (TA-facing)
+// ============================================================
+
+async function checkWorkloadSuggestion() {
+    if (!state.applicantId) return;
+    try {
+        let res = await fetch("api/workloadSuggestion", { credentials: "same-origin" });
+        if (!res.ok) return;
+        let json = await res.json();
+        if (!json.hasSuggestion) return;
+        let sugg = json.suggestion;
+        // Render the warning modal
+        document.getElementById("workloadPosLabel").textContent =
+            (sugg.targetPositionCode || "") + " — " + (sugg.targetPositionName || "");
+        document.getElementById("workloadReasonBox").innerHTML =
+            "<strong>AI Analysis:</strong> " + (sugg.reasoning || sugg.summary || "N/A");
+        document.getElementById("workloadWarningOverlay").classList.add("show");
+    } catch (e) {
+        console.error("[WorkloadSuggestion] Failed to check:", e);
+    }
+}
+
+async function workloadWarningConfirm() {
+    let csrf = state.csrfToken || sessionStorage.getItem("csrfToken") || "";
+    let p = new URLSearchParams({ action: "confirm", _csrf: csrf });
+    try {
+        let res = await fetch("api/workloadSuggestionResponse", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p,
+            credentials: "same-origin"
+        });
+        let json = await res.json();
+        document.getElementById("workloadWarningOverlay").classList.remove("show");
+        if (json.success) {
+            showToast("Position removed. Your workload has been updated.", "success");
+            // Refresh the TA page data
+            loadApplications();
+            loadMyPositions();
+        } else {
+            showToast(json.message || "Operation failed.", "error");
+        }
+    } catch (e) {
+        document.getElementById("workloadWarningOverlay").classList.remove("show");
+        showToast("Network error. Please try again.", "error");
+    }
+}
+
+function workloadWarningDismiss() {
+    let csrf = state.csrfToken || sessionStorage.getItem("csrfToken") || "";
+    let p = new URLSearchParams({ action: "dismiss", _csrf: csrf });
+    fetch("api/workloadSuggestionResponse", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body: p,
+        credentials: "same-origin"
+    }).catch(function() {});
+    document.getElementById("workloadWarningOverlay").classList.remove("show");
+    showToast("Suggestion dismissed. Your workload remains unchanged.", "info");
+}
+
 (async function init() {
     await checkSession();
     if (!state.session.username) return;
@@ -456,6 +580,8 @@ function profileEmailMerged(a) {
     renderStats();
     refreshTaUnread();
     setInterval(refreshTaUnread, 25000);
+    // Check for pending workload adjustment suggestion
+    checkWorkloadSuggestion();
 })();
 
 // Load system config (skill suggestions, data traceability) from backend
@@ -613,7 +739,7 @@ async function loadApplications() {
         state.applications = json.applications || [];
         renderApplications();
         renderStats();
-        // Accepted 申请增加后，My Positions 应同步刷新
+        // After Accepted application count increases, My Positions should refresh synchronously
         loadMyPositions();
     } catch(e) { console.error(e); }
 }
@@ -644,8 +770,8 @@ function renderPositions() {
     let container = document.getElementById("positionsList");
     let sort = document.getElementById("sortSelect").value;
     let apps = state.applications;
-    // 修复4: 只显示尚未申请（或申请被拒绝）的开放职位
-    let positions = state.positions.filter(p => p.isOpen && !apps.some(a => a.positionCode === p.code));
+    // Fix 4: Only show open positions not yet applied to (or with rejected application)
+    let positions = state.positions.filter(p => p.open && !apps.some(a => a.positionCode === p.code));
 
     if (sort === "score") positions.sort((a,b) => getMatchScore(b, state.applicant) - getMatchScore(a, state.applicant));
     else if (sort === "deadline") positions.sort((a,b) => a.deadline.localeCompare(b.deadline));
@@ -667,7 +793,7 @@ function renderPositions() {
             return `<span class="skill-tag${has?' highlight':''}">${s}${!has?' (missing)':''}</span>`;
         }).join("");
         let matchDetail = getScoreDetail(p, state.applicant);
-        // 修复3: 课程名和课程编号同时清晰显示（code为主，name为副）
+        // Fix 3: Show both course name and code clearly (code primary, name secondary)
         return `<div class="pos-card">
             <div class="pos-card-header">
                 <div><strong style="color:var(--primary-dark);font-size:1rem">${p.code}</strong> <span style="color:var(--muted)">—</span> <span style="font-size:0.95rem">${p.name || '—'}</span></div>
@@ -735,6 +861,7 @@ function renderProfile() {
             <div><label>Hours Available</label><div>${hrsHtml}</div></div>
             <div><label>Profile ID</label><div style="font-family:monospace;color:var(--muted)">${fmtDash(a.id)}</div></div>
         </div>`;
+    renderCvStatus();
 }
 
 function renderSkills() {
@@ -746,7 +873,7 @@ function renderSkills() {
 }
 
 function renderSkillsGap() {
-    let openPositions = state.positions.filter(p => p.isOpen);
+    let openPositions = state.positions.filter(p => p.open);
     let mySkills = (state.applicant && state.applicant.skills) ? state.applicant.skills : [];
     let allRequired = {};
     openPositions.forEach(p => {
@@ -795,7 +922,7 @@ function getScoreDetail(pos, applicant) {
 }
 
 function buildTimeline(status) {
-    // 简化为三步：Submitted → Under Review → Decision（Accepted/Rejected）
+    // Simplified to three steps: Submitted → Under Review → Decision (Accepted/Rejected)
     let steps = ["Submitted", "Under Review", "Decision"];
     let current = steps.indexOf(status);
     if (status === "Accepted") current = steps.length - 1;
@@ -865,6 +992,7 @@ async function removeSkill(skill) {
         showToast("Skill \"" + skill + "\" removed", "warn");
         await loadApplicant();
         await loadPositions();
+        renderSkills();
         renderSkillsGap();
     } catch(e) { showToast("Error removing skill", "error"); }
 }
@@ -937,6 +1065,7 @@ async function doAddSkill(skill) {
         showToast("Skill \"" + skill + "\" added successfully", "success");
         await loadApplicant();
         await loadPositions();
+        renderSkills();
         renderSkillsGap();
     } catch(e) { showToast("Error adding skill", "error"); }
 }
@@ -965,10 +1094,9 @@ function handleCVUpload(input) {
     fd.append("applicantId", state.applicantId);
     fd.append("_csrf", state.csrfToken || sessionStorage.getItem("csrfToken") || "");
 
-    let btn = input.closest('.btn') || document.createElement('button');
-    let origText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Uploading...";
+    let btn = document.getElementById("btnUploadCv");
+    let origText = btn ? btn.textContent : "Upload CV";
+    if (btn) { btn.disabled = true; btn.textContent = "Uploading..."; }
 
     fetch(APP_CTX + "/upload", {
         method: "POST",
@@ -979,16 +1107,69 @@ function handleCVUpload(input) {
     .then(json => {
         if (json.success) {
             showToast("CV uploaded: " + (json.originalName || file.name), "success");
+            // Update TA's CV filename
+            if (state.applicant) state.applicant.cvFileName = json.filename;
+            renderCvStatus();
         } else {
             showToast("Upload failed: " + (json.message || "Unknown error"), "error");
         }
     })
     .catch(e => showToast("Error: " + e.message, "error"))
     .finally(() => {
-        btn.disabled = false;
-        btn.textContent = origText;
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
         input.value = '';
     });
+}
+
+function deleteCV() {
+    if (!state.applicantId) { showToast("Please set up your profile first", "error"); return; }
+    if (!state.applicant || !state.applicant.cvFileName) {
+        showToast("No CV to delete", "warn");
+        return;
+    }
+    if (!confirm("Are you sure you want to delete your CV? You can upload a new one after deletion.")) return;
+
+    let btn = document.getElementById("btnDeleteCv");
+    if (btn) { btn.disabled = true; btn.textContent = "Deleting..."; }
+
+    fetch(APP_CTX + "/upload?applicantId=" + encodeURIComponent(state.applicantId), {
+        method: "DELETE",
+        credentials: "same-origin"
+    })
+    .then(r => r.json())
+    .then(json => {
+        if (json.success) {
+            showToast("CV deleted successfully", "success");
+            if (state.applicant) state.applicant.cvFileName = null;
+            renderCvStatus();
+        } else {
+            showToast("Delete failed: " + (json.message || "Unknown error"), "error");
+        }
+    })
+    .catch(e => showToast("Error: " + e.message, "error"))
+    .finally(() => {
+        if (btn) { btn.disabled = false; btn.textContent = "Delete CV"; }
+    });
+}
+
+function renderCvStatus() {
+    let statusEl = document.getElementById("cvStatus");
+    let uploadBtn = document.getElementById("btnUploadCv");
+    let deleteBtn = document.getElementById("btnDeleteCv");
+    if (!statusEl || !uploadBtn || !deleteBtn) return;
+
+    let hasCv = state.applicant && state.applicant.cvFileName;
+    if (hasCv) {
+        let fileName = state.applicant.cvFileName;
+        let ext = fileName.split('.').pop().toUpperCase();
+        statusEl.innerHTML = '<span style="color:var(--success);font-size:0.88rem">&#9989; CV uploaded (' + ext + ')</span>';
+        uploadBtn.textContent = "Re-upload CV";
+        deleteBtn.style.display = "inline-block";
+    } else {
+        statusEl.innerHTML = '<span style="color:var(--muted);font-size:0.88rem">No CV uploaded</span>';
+        uploadBtn.textContent = "Upload CV";
+        deleteBtn.style.display = "none";
+    }
 }
 
 function openProfileModal() {
@@ -1059,6 +1240,24 @@ async function saveProfile() {
 async function openAppDetail(appId, code, status) {
     let app = state.applications.find(a => a.positionCode === code);
     if (!app) return;
+    // When TA views a MO-rejected application detail, clear the rejectedByMo flag so the position becomes Available again
+    if (app.status === "Rejected" && app.rejectedByMo) {
+        let p = new URLSearchParams();
+        p.append("_csrf", state.csrfToken || sessionStorage.getItem("csrfToken") || "");
+        p.append("applicationId", appId || (app.applicantId + "_" + code));
+        fetch("api/markApplicationViewed", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: p,
+            credentials: "same-origin"
+        }).then(function(r) { return r.json(); }).then(function(json) {
+            if (json.success) {
+                app.rejectedByMo = false;
+                loadPositions();
+                loadApplications();
+            }
+        }).catch(function() {});
+    }
     let fillClass = app.aiScore >= 75 ? "fill-high" : app.aiScore >= 55 ? "fill-mid" : "fill-low";
     let llmSection = app.llmExplanation
         ? `<div style="padding:14px;background:#e8f4fd;border-radius:8px;margin-bottom:14px;font-size:0.82rem;white-space:pre-wrap;line-height:1.6">
@@ -1182,25 +1381,70 @@ async function loadTaMoThreads() {
             return;
         }
         state.taMoThreads = j.threads || [];
+        let accepted = state.taMoThreads.filter(function(t) { return t.status === "accepted"; });
+        let pending = state.taMoThreads.filter(function(t) { return t.status === "pending"; });
         if (!state.taMoThreads.length) {
-            el.innerHTML = "<p style=color:var(--muted)>No accepted positions yet — once an MO accepts you, their inbox appears here.</p>";
+            el.innerHTML = "<p style=color:var(--muted)>No MO messages yet — once you apply or are accepted, MOs will appear here.</p>";
             return;
         }
-        el.innerHTML = state.taMoThreads.map(function(t) {
-            let u = t.unread ? (" <span style=color:var(--accent);font-weight:700>(" + t.unread + " new)</span>") : "";
-            return "<div class=\"pos-card\" style=cursor:pointer onclick=\"openTaMoThread('" + escTaAttr(t.moUsername) + "','" + escTaAttr(t.moDisplayName || t.moUsername) + "')\">" +
-                "<strong>" + escTa(t.moDisplayName || t.moUsername) + "</strong>" + u +
-                "<div style=font-size:0.78rem;color:var(--muted);margin-top:6px>@" + escTa(t.moUsername) + "</div></div>";
-        }).join("");
+        let html = "";
+        // Pending section
+        if (pending.length) {
+            html += "<div style=margin-bottom:20px>";
+            html += "<div style=display:flex;align-items:center;gap:8px;margin-bottom:10px>";
+            html += "<span class=status-chip status-review>Pending Review</span>";
+            html += "<span style=font-size:0.75rem;color:var(--muted)>MO messages shown, but you cannot reply until accepted</span>";
+            html += "</div>";
+            html += pending.map(function(t) {
+                let u = t.unread ? (" <span style=color:var(--accent);font-weight:700>(" + t.unread + " new)</span>") : "";
+                return "<div class=pos-card style=cursor:pointer;opacity:0.75 onclick=\"openTaMoThread('" + escTaAttr(t.moUsername) + "','" + escTaAttr(t.moDisplayName || t.moUsername) + "','pending')\">" +
+                    "<strong>" + escTa(t.moDisplayName || t.moUsername) + "</strong>" + u +
+                    "<div style=font-size:0.78rem;color:var(--muted);margin-top:6px>@" + escTa(t.moUsername) + " <span style=color:var(--accent)>(Pending)</span></div></div>";
+            }).join("");
+            html += "</div>";
+        }
+        // Accepted section
+        if (accepted.length) {
+            html += "<div>";
+            html += "<div style=display:flex;align-items:center;gap:8px;margin-bottom:10px>";
+            html += "<span class=status-chip status-accepted>Accepted</span>";
+            html += "<span style=font-size:0.75rem;color:var(--muted)>Your MO supervisors — you can send messages</span>";
+            html += "</div>";
+            html += accepted.map(function(t) {
+                let u = t.unread ? (" <span style=color:var(--accent);font-weight:700>(" + t.unread + " new)</span>") : "";
+                return "<div class=pos-card style=cursor:pointer onclick=\"openTaMoThread('" + escTaAttr(t.moUsername) + "','" + escTaAttr(t.moDisplayName || t.moUsername) + "','accepted')\">" +
+                    "<strong>" + escTa(t.moDisplayName || t.moUsername) + "</strong>" + u +
+                    "<div style=font-size:0.78rem;color:var(--muted);margin-top:6px>@" + escTa(t.moUsername) + "</div></div>";
+            }).join("");
+            html += "</div>";
+        }
+        el.innerHTML = html;
     } catch (e) {
         el.innerHTML = "<span style=color:var(--accent)>Failed to load.</span>";
     }
 }
 
-async function openTaMoThread(moUsername, moDisplayName) {
+async function openTaMoThread(moUsername, moDisplayName, status) {
     state.selectedMoUsername = moUsername;
+    state.selectedMoStatus = status || "accepted";
     document.getElementById("taMoMsgCard").style.display = "block";
     document.getElementById("taMoMsgTitle").textContent = "Conversation · " + moDisplayName;
+    // Hide or show reply controls based on status
+    let replyLabel = document.querySelector("#taMoMsgCard label");
+    let replyArea = document.getElementById("taMoMsgBody");
+    let sendBtn = replyArea ? replyArea.nextElementSibling : null;
+    if (state.selectedMoStatus === "pending") {
+        if (replyLabel) replyLabel.textContent = "Reply (disabled — not accepted yet)";
+        if (replyArea) { replyArea.disabled = true; replyArea.placeholder = "You cannot reply until your application is accepted."; }
+        // Hide the send button for pending
+        let btns = document.querySelectorAll("#taMoMsgCard .btn");
+        btns.forEach(function(b) { if (b.textContent.includes("Send")) b.style.display = "none"; });
+    } else {
+        if (replyLabel) replyLabel.textContent = "Reply";
+        if (replyArea) { replyArea.disabled = false; replyArea.placeholder = "Write to your module organiser…"; }
+        let btns = document.querySelectorAll("#taMoMsgCard .btn");
+        btns.forEach(function(b) { if (b.textContent.includes("Send")) b.style.display = ""; });
+    }
     document.getElementById("taMoMsgBody").value = "";
     await loadTaMoThreadView();
     let p = new URLSearchParams();
@@ -1214,6 +1458,14 @@ async function openTaMoThread(moUsername, moDisplayName) {
 function closeTaMoMsgCard() {
     document.getElementById("taMoMsgCard").style.display = "none";
     state.selectedMoUsername = null;
+    state.selectedMoStatus = null;
+    // Restore reply controls for next open
+    let replyLabel = document.querySelector("#taMoMsgCard label");
+    let replyArea = document.getElementById("taMoMsgBody");
+    if (replyLabel) replyLabel.textContent = "Reply";
+    if (replyArea) { replyArea.disabled = false; replyArea.placeholder = "Write to your module organiser…"; }
+    let btns = document.querySelectorAll("#taMoMsgCard .btn");
+    btns.forEach(function(b) { if (b.textContent.includes("Send")) b.style.display = ""; });
 }
 
 async function loadTaMoThreadView() {

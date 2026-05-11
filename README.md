@@ -128,9 +128,9 @@ flowchart TD
         C1 --> C6["System Log Viewer<br/>(file I/O events)"]
     end
 
-    A3 -->|"saved → applications_data.txt"| B3
-    B5 -->|"saved → recruitment_data.txt"| C5
-    B1 -->|"saved → positions_data.txt"| A1
+    A3 -->|"saved → applications.json"| B3
+    B5 -->|"saved → applications.json + workloads.json"| C5
+    B1 -->|"saved → positions.json"| A1
 
     style TA fill:#e8f0f6,stroke:#457b9d,stroke-width:2px
     style MO fill:#e6f5f3,stroke:#2a9d8f,stroke-width:2px
@@ -159,18 +159,20 @@ The deployable web application runs on **Apache Tomcat 10.1+** with **Jakarta EE
 
 | Component | Technology | Role |
 |-----------|------------|------|
-| **Runtime** | Apache Tomcat 10.x | Servlet container; exploded WAR under `webapps/SmartTA/` |
+| **Runtime** | Apache Tomcat 10.x | Servlet container; SmartTA deployed under `webapps/` |
 | **Language** | Java 17 | Business logic, models, JSON API |
-| **Views** | JSP (`index.jsp`, `ta.jsp`, `mo.jsp`, `admin.jsp`, `error.jsp`) | Role-based dashboards; client-side JS calls REST endpoints |
+| **Views** | JSP (`src/main/webapp/index.jsp`, `ta.jsp`, `mo.jsp`, `admin.jsp`) | Role-based dashboards; client-side JS calls REST endpoints |
 | **REST API** | `ApiServlet` → `/api/*` | JSON over HTTP: positions, applicants, applications, logs, workloads, scoring, apply/update flows |
 | **Authentication** | `AuthServlet` → `/auth/*` | Session-based login, logout, role switching |
+| **File Upload** | `UploadServlet` → `/upload`, `DownloadServlet` → `/download` | TA CV upload/download |
+| **Reporting** | `HtmlReportGenerator` → `/report` | HTML test coverage report generation |
 | **Serialization** | Jackson (databind) | Read/write JSON for persistence and API responses |
 | **Data access** | `DataStore` + `JsonFileStore` | Singleton in-memory cache with flush to `data/*.json` |
 | **AI Integration** | `LLMService` + DeepSeek API | AI match analysis, workload rebalancing recommendations |
 | **Security** | `SecurityHeadersFilter` | HTTP security headers (XSS, clickjacking protection) |
-| **Config** | `WEB-INF/web.xml` | Servlet mappings, welcome file, error pages |
+| **Config** | `src/main/webapp/WEB-INF/web.xml` | Servlet mappings, welcome file, error pages |
 
-> **No SQL/NoDB:** The system stores all data as JSON files via `JsonFileStore` under `webapps/SmartTA/data/`. This satisfies the EBU6304 No-DB constraint while providing real persistence — not a simulation. Each write operation (position creation, application submission, profile update) is immediately flushed to disk and reflected in subsequent reads.
+> **No SQL/NoDB:** The system stores all data as JSON files via `JsonFileStore` under `data/`. This satisfies the EBU6304 No-DB constraint while providing real persistence — not a simulation. Each write operation (position creation, application submission, profile update) is immediately flushed to disk and reflected in subsequent reads.
 
 ---
 
@@ -274,8 +276,6 @@ Development follows a four-iteration Agile Scrum cycle. Each iteration delivers 
 
 ### Smart-TA Development Roadmap
 
-### Smart-TA Development Roadmap
-
 ```mermaid
 %%{init: {'theme':'base','themeCSS':'.grid .tick text{font-size:13px!important;fill:#0f172a!important;font-weight:600!important;}.grid .tick line{opacity:0.85;}.today line{stroke:#1d4ed8!important;stroke-width:3.5px!important;opacity:1!important;stroke-dasharray:none!important;stroke-linecap:round!important;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 8px rgba(29,78,216,0.85)) drop-shadow(0 0 14px rgba(37,99,235,0.45));}','themeVariables':{'primaryColor':'#2563eb','primaryTextColor':'#ffffff','secondaryColor':'#64748b','tertiaryColor':'#475569','lineColor':'#94a3b8','textColor':'#334155','titleColor':'#1e293b','taskBkgColor':'#475569','taskTextColor':'#ffffff','taskTextLightColor':'#ffffff','taskTextDarkColor':'#ffffff','taskTextOutsideColor':'#0f172a','activeTaskBkgColor':'#2563eb','activeTaskBorderColor':'#1d4ed8','gridColor':'#cbd5e1','todayLineColor':'#1d4ed8'},'gantt':{'useWidth':2360,'useMaxWidth':true,'leftPadding':130,'rightPadding':460,'barHeight':36,'barGap':14,'fontSize':14,'sectionFontSize':15,'titleTopMargin':20,'topPadding':96}}}%%
 gantt
@@ -355,18 +355,19 @@ EBU6304-Group-37/
     ├── pom.xml                 # Maven build configuration (JUnit 5, JaCoCo)
     ├── src/main/java/com/bupt/smartta/
     │   ├── model/              # TAPplicant, Position, Application, SystemLog, MoTaMessage, User, SystemConfig
-    │   ├── servlet/            # ApiServlet, AuthServlet, UploadServlet, DownloadServlet (REST API)
+    │   ├── servlet/            # ApiServlet, AuthServlet, UploadServlet, DownloadServlet, HtmlReportGenerator (REST API & reporting)
     │   ├── util/               # DataStore singleton, JsonFileStore, LLMService
     │   ├── filter/             # SecurityHeadersFilter (XSS/clickjacking protection)
     │   └── listener/           # AppContextListener (system initialization)
-    ├── src/test/java/          # JUnit 5 unit tests (162 tests passing)
-    ├── src/test/resources/     # Test data (JSON fixtures)
-    ├── WebContent/
+    ├── src/main/webapp/
     │   ├── index.jsp           # Role-selection landing page
     │   ├── ta.jsp              # TA Dashboard (profile, apply, my positions, messages)
     │   ├── mo.jsp              # MO Portal (post, review, accept/reject, my TAs, messages)
     │   ├── admin.jsp           # Admin Overview (workload, logs, user/applicant management)
+    │   ├── register.html       # Self-service TA registration page
     │   └── WEB-INF/web.xml     # Servlet configuration
+    ├── src/test/java/          # JUnit 5 unit tests (162 tests passing)
+    ├── src/test/resources/     # Test data (JSON fixtures)
     ├── data/                   # JSON persistence (created at runtime)
     │   ├── users.json          # User accounts
     │   ├── applicants.json     # TA applicant profiles
@@ -374,9 +375,13 @@ EBU6304-Group-37/
     │   ├── applications.json   # Application records
     │   ├── workloads.json      # TA workload hours
     │   ├── system_logs.json    # File I/O activity log
-    │   ├── mo_ta_messages.json # MO↔TA message history
-    │   └── system_config.json  # System configuration & version info
-    └── cv_uploads/             # Uploaded CV files (PDF/DOC/DOCX)
+    │   ├── mota_messages.json  # MO↔TA message history
+    │   ├── system_config.json  # System configuration & version info
+    │   └── workload_suggestion.json  # AI workload rebalancing recommendation
+    ├── cv_uploads/             # Uploaded CV files (PDF/DOC/DOCX)
+    ├── .env                    # DeepSeek LLM API key configuration
+    ├── screenshots/            # UI screenshots for documentation
+    └── package-lock.json       # Node.js dependency lock (optional frontend tooling)
 ```
 
 > **v3.0 Final Assessment:** The `SmartTA/` directory contains the fully functional Java Servlet/JSP application. Run `mvn test` in the `SmartTA/` directory to execute the automated test suite. See `SmartTA/` for deployment instructions. The original `Prototype_group37.html` remains available as the standalone visual prototype.

@@ -7,7 +7,7 @@
     <display-name>Smart-TA Recruitment System</display-name>
     <description>BUPT International School TA Recruitment System — EBU6304 Group 37</description>
 
-    <!-- 安全响应头 Filter -->
+    <!-- Security response header Filter -->
     <filter>
         <filter-name>SecurityHeadersFilter</filter-name>
         <filter-class>com.bupt.smartta.filter.SecurityHeadersFilter</filter-class>
@@ -17,11 +17,11 @@
         <url-pattern>/*</url-pattern>
     </filter-mapping>
 
-    <!-- Servlet 映射 -->
+    <!-- Servlet mappings -->
     <servlet>
         <servlet-name>ApiServlet</servlet-name>
         <servlet-class>com.bupt.smartta.servlet.ApiServlet</servlet-class>
-        <!-- 启用 multipart 上传支持（CV 上传需要） -->
+        <!-- Enable multipart upload support (required for CV upload) -->
         <multipart-config>
             <max-file-size>5242880</max-file-size><!-- 5MB -->
             <max-request-size>10485760</max-request-size><!-- 10MB -->
@@ -33,7 +33,7 @@
         <url-pattern>/api/*</url-pattern>
     </servlet-mapping>
 
-    <!-- 独立的 CV 上传 Servlet -->
+    <!-- Standalone CV upload Servlet -->
     <servlet>
         <servlet-name>UploadServlet</servlet-name>
         <servlet-class>com.bupt.smartta.servlet.UploadServlet</servlet-class>
@@ -66,21 +66,21 @@
         <url-pattern>/auth/*</url-pattern>
     </servlet-mapping>
 
-    <!-- Session 配置 -->
+    <!-- Session configuration -->
     <session-config>
         <session-timeout>30</session-timeout>
         <cookie-config>
             <http-only>true</http-only>
-            <!-- P0-10: 生产环境应设为 true（HTTPS 环境） -->
-            <!-- 开发环境设为 false 避免 HTTP 下无法登录 -->
+            <!-- P0-10: Should be true in production (HTTPS environment) -->
+            <!-- Set to false in dev environment to avoid login failures over HTTP -->
             <secure>false</secure>
             <name>SMARTA_SESSION</name>
         </cookie-config>
         <tracking-mode>COOKIE</tracking-mode>
     </session-config>
 
-    <!-- 不在此配置全局 error-page：否则 /auth、/api 返回 JSON 时，一旦发生 500 或未处理异常，
-         容器会转发到 error.jsp 返回 HTML，前端期望 JSON 会解析失败（你看到整页 HTML 报错）。 -->
+    <!-- Do not configure global error-page here: otherwise when /auth, /api return JSON, once a 500 or unhandled exception occurs,
+         the container forwards to error.jsp which returns HTML, but the frontend expects JSON and parsing fails (you see a full HTML error page). -->
 
     <welcome-file-list>
         <welcome-file>index.jsp</welcome-file>
