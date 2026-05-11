@@ -22,17 +22,25 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * CV 文件上传处理 Servlet。
+ * Handles CV file upload and deletion for TA applicants.
  *
- * 安全措施：
- * 1. 角色校验：仅 TA/ADMIN 可上传
- * 2. 文件类型白名单：仅允许 .pdf, .doc, .docx
- * 3. 文件大小限制：≤5MB（在 web.xml 的 multipart-config 中配置）
- * 4. 存储路径安全：文件以 UUID 重命名，防止路径穿越
- * 5. 扩展名校验：不允许双扩展名（如 shell.pdf.jpg）
+ * <p>This servlet processes POST requests to {@code /upload} for uploading CV files
+ * and DELETE requests for removing previously uploaded CVs. Security measures include:
+ * <ul>
+ *   <li>Role enforcement: only TA and ADMIN may upload/delete</li>
+ *   <li>File-type allowlist: only PDF, DOC, and DOCX are accepted</li>
+ *   <li>File-size limit: 5 MB per file (configured in {@code web.xml})</li>
+ *   <li>Safe filenames: files are renamed to a random UUID, preventing path traversal</li>
+ *   <li>Extension validation: double extensions (e.g., {@code shell.pdf.jpg}) are rejected</li>
+ *   <li>One CV per TA: uploading a new file automatically deletes the old one</li>
+ * </ul>
+ *
+ * <p>Uploaded files are stored in {@code cv_uploads/} within the SmartTA webapp directory.</p>
+ *
+ * @see com.bupt.smartta.servlet.DownloadServlet
  */
 @MultipartConfig(
-    maxFileSize = 5 * 1024 * 1024,   // 5MB
+    maxFileSize = 5 * 1024 * 1024,   // 5 MB
     maxRequestSize = 10 * 1024 * 1024,
     fileSizeThreshold = 1024 * 1024
 )
@@ -40,7 +48,7 @@ public class UploadServlet extends HttpServlet {
 
     private static final DataStore ds = DataStore.getInstance();
 
-    /** 允许的文件扩展名白名单（小写） */
+    /** Allowed file extension allowlist (lowercase). */
     private static final Set<String> ALLOWED_EXTENSIONS = new HashSet<>();
     static {
         ALLOWED_EXTENSIONS.add(".pdf");
@@ -48,7 +56,7 @@ public class UploadServlet extends HttpServlet {
         ALLOWED_EXTENSIONS.add(".docx");
     }
 
-    /** MIME 类型白名单 */
+    /** Allowed MIME type allowlist. */
     private static final Set<String> ALLOWED_TYPES = new HashSet<>();
     static {
         ALLOWED_TYPES.add("application/pdf");
@@ -56,7 +64,7 @@ public class UploadServlet extends HttpServlet {
         ALLOWED_TYPES.add("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     }
 
-    /** 上传目录（相对 SmartTA 应用根目录） */
+    /** Upload directory relative to the SmartTA webapp root. */
     private static final String UPLOAD_DIR = "cv_uploads";
 
     private boolean hasRole(HttpServletRequest req, String... roles) {
@@ -143,6 +151,18 @@ public class UploadServlet extends HttpServlet {
         Path uploadDir = Paths.get(catalinaBase, "webapps", "SmartTA", UPLOAD_DIR);
         Files.createDirectories(uploadDir);
 
+        // 删除旧CV文件（如果存在）- 每个TA只能有一个CV
+        String oldFileName = ta.getCvFileName();
+        if (oldFileName != null && !oldFileName.isEmpty()) {
+            Path oldFilePath = uploadDir.resolve(oldFileName);
+            try {
+                Files.deleteIfExists(oldFilePath);
+                ds.addLog(SystemLog.OP_WRITE, "DELETE:" + UPLOAD_DIR + "/" + oldFileName, SystemLog.STATUS_OK);
+            } catch (IOException e) {
+                System.err.println("[UploadServlet] Failed to delete old CV: " + oldFileName);
+            }
+        }
+
         Path targetPath = uploadDir.resolve(safeFileName);
 
         // 写入文件
@@ -164,7 +184,65 @@ public class UploadServlet extends HttpServlet {
     }
 
     /**
-     * 从 Part 中提取原始文件名（兼容不同 Servlet 容器）。
+     * Deletes the CV file associated with a TA applicant.
+     * Each TA may have only one CV; after deletion they may upload a new one.
+     */
+    @Override
+    protected void doDelete(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+        req.setCharacterEncoding("UTF-8");
+        resp.setContentType("application/json");
+        resp.setCharacterEncoding("UTF-8");
+
+        // 权限校验
+        if (!hasRole(req, "TA", "ADMIN")) {
+            sendError(resp, 403, "Insufficient permissions: TA or ADMIN role required");
+            return;
+        }
+
+        // 获取 applicantId
+        String applicantId = req.getParameter("applicantId");
+        if (applicantId == null || applicantId.isEmpty()) {
+            sendError(resp, 400, "Applicant ID is required");
+            return;
+        }
+        TAPplicant ta = ds.getApplicantById(applicantId);
+        if (ta == null) {
+            sendError(resp, 404, "Applicant not found: " + applicantId);
+            return;
+        }
+
+        // 获取旧 CV 文件名
+        String oldFileName = ta.getCvFileName();
+        if (oldFileName == null || oldFileName.isEmpty()) {
+            sendError(resp, 404, "No CV file to delete");
+            return;
+        }
+
+        // 确定上传目录路径
+        String catalinaBase = System.getProperty("catalina.base", "");
+        Path uploadDir = Paths.get(catalinaBase, "webapps", "SmartTA", UPLOAD_DIR);
+        Path oldFilePath = uploadDir.resolve(oldFileName);
+
+        // 删除旧 CV 文件
+        try {
+            Files.deleteIfExists(oldFilePath);
+        } catch (IOException e) {
+            System.err.println("[UploadServlet] Failed to delete CV file: " + oldFileName);
+        }
+
+        // 清除申请者的 CV 文件名
+        ta.setCvFileName(null);
+        ds.saveApplicant(ta);
+        ds.addLog(SystemLog.OP_WRITE, "DELETE:" + UPLOAD_DIR + "/" + oldFileName, SystemLog.STATUS_OK);
+
+        String json = "{\"success\":true,\"message\":\"CV deleted successfully\"}";
+        resp.getWriter().write(json);
+    }
+
+    /**
+     * Extracts the original filename from a multipart request Part.
+     * Compatible with different Servlet container implementations.
      */
     private String extractFileName(Part part) {
         String contentDisposition = part.getHeader("content-disposition");

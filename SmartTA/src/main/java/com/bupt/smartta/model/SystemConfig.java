@@ -2,47 +2,73 @@ package com.bupt.smartta.model;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Map;
 
 /**
- * 系统配置模型，包含演示账户、版本历史、功能覆盖项等前端所需数据。
- * 统一由后端管理，前端通过 /api/config 端点获取，消除硬编码。
+ * Holds system-wide configuration data used by the Smart-TA frontend and backend.
+ *
+ * <p>This model is loaded lazily from {@code system_config.json} via
+ * {@link com.bupt.smartta.util.DataStore#getSystemConfig()}. It provides demo
+ * account credentials, application version info, feature coverage checklists,
+ * workload thresholds, position defaults, skill suggestion lists, and data
+ * traceability metadata — all in one place rather than being hardcoded in JSP pages.</p>
+ *
+ * <p>Several inner static classes represent structured sub-configurations:</p>
+ * <ul>
+ *   <li>{@link DemoAccount} — pre-configured demo login credentials</li>
+ *   <li>{@link VersionEntry} — version history entries</li>
+ *   <li>{@link FeatureCoverage} — feature checklist items with icons</li>
+ *   <li>{@link FileStatusConfig} — data file metadata for the Data Traceability panel</li>
+ *   <li>{@link WorkloadConfig} — TA workload capacity settings</li>
+ *   <li>{@link PositionDefaults} — default values for new position creation</li>
+ *   <li>{@link DataTraceability} — paths/last-modified metadata for each data file</li>
+ * </ul>
+ *
+ * @see com.bupt.smartta.util.DataStore
  */
 public class SystemConfig implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    // ---- 演示账户 ----
+    /** List of pre-configured demo accounts for evaluation. */
     private List<DemoAccount> demoAccounts;
+    /** Current application version string (e.g., "3.0"). */
     private String appVersion;
+    /** Build date of the application in ISO format. */
     private String buildDate;
 
-    // ---- 版本历史 ----
+    /** Version history entries describing past releases. */
     private List<VersionEntry> versionHistory;
 
-    // ---- 功能覆盖清单 ----
+    /** Feature coverage checklist items (icon + text). */
     private List<FeatureCoverage> featureCoverage;
 
-    // ---- 文件状态配置 ----
+    /** Data file status entries for the Data Traceability panel. */
     private List<FileStatusConfig> fileStatusConfig;
 
-    // ---- 工作负载配置 ----
+    /** TA workload configuration (capacity and overload threshold). */
     private WorkloadConfig workloadConfig;
 
-    // ---- 职位发布默认值 ----
+    /** Default values used when creating a new position. */
     private PositionDefaults positionDefaults;
 
-    // ---- 技能建议列表 ----
+    /** Pre-defined skill suggestions shown in the TA profile editor. */
     private List<String> skillSuggestions;
 
-    // ---- 数据追溯信息 ----
+    /** Data traceability metadata (paths and last-modified info for each JSON file). */
     private DataTraceability dataTraceability;
 
-    // ---- 内部类：演示账户 ----
+    // ---- Inner class: Demo Account ----
+    /**
+     * Represents a pre-configured demo account for evaluation purposes.
+     */
     public static class DemoAccount implements Serializable {
         private static final long serialVersionUID = 1L;
+        /** Demo login username. */
         private String username;
+        /** Demo plaintext password (for display in the About panel). */
         private String password;
+        /** Role assigned to this demo account. */
         private String role;
+        /** Display name of the account holder. */
         private String displayName;
 
         public DemoAccount() {}
@@ -63,12 +89,19 @@ public class SystemConfig implements Serializable {
         public void setDisplayName(String displayName) { this.displayName = displayName; }
     }
 
-    // ---- 内部类：版本条目 ----
+    // ---- Inner class: Version Entry ----
+    /**
+     * Represents a single version history entry.
+     */
     public static class VersionEntry implements Serializable {
         private static final long serialVersionUID = 1L;
+        /** Version string (e.g., "3.0"). */
         private String version;
+        /** Release date. */
         private String date;
+        /** Brief title of this release. */
         private String title;
+        /** Detailed description of changes. */
         private String description;
 
         public VersionEntry() {}
@@ -89,11 +122,16 @@ public class SystemConfig implements Serializable {
         public void setDescription(String description) { this.description = description; }
     }
 
-    // ---- 内部类：功能覆盖项 ----
+    // ---- Inner class: Feature Coverage Item ----
+    /**
+     * Represents a feature coverage checklist item with an icon and description.
+     */
     public static class FeatureCoverage implements Serializable {
         private static final long serialVersionUID = 1L;
-        private String icon;    // Unicode emoji 或 SVG 图标
-        private String text;    // 功能描述文本
+        /** Icon — either a Unicode emoji or an SVG path. */
+        private String icon;
+        /** Feature description text. */
+        private String text;
 
         public FeatureCoverage() {}
         public FeatureCoverage(String icon, String text) {
@@ -107,11 +145,17 @@ public class SystemConfig implements Serializable {
         public void setText(String text) { this.text = text; }
     }
 
-    // ---- 内部类：文件状态配置 ----
+    // ---- Inner class: File Status Config ----
+    /**
+     * Represents the metadata for a single data file shown in the Data Traceability panel.
+     */
     public static class FileStatusConfig implements Serializable {
         private static final long serialVersionUID = 1L;
+        /** Actual filename on disk (without path). */
         private String filename;
+        /** Human-readable display name for the UI. */
         private String displayName;
+        /** Logical category (e.g., "Applicant Data", "System Data"). */
         private String category;
 
         public FileStatusConfig() {}
@@ -129,11 +173,17 @@ public class SystemConfig implements Serializable {
         public void setCategory(String category) { this.category = category; }
     }
 
-    // ---- 内部类：工作负载配置 ----
+    // ---- Inner class: Workload Config ----
+    /**
+     * Configures the TA workload capacity and overload detection threshold.
+     */
     public static class WorkloadConfig implements Serializable {
         private static final long serialVersionUID = 1L;
+        /** Maximum safe weekly hours per TA. */
         private int capacity;
+        /** Hours-per-week value above which a TA is considered overloaded. */
         private int overloadThreshold;
+        /** Human-readable unit label for the threshold (e.g., "h/week"). */
         private String overloadUnit;
 
         public WorkloadConfig() {}
@@ -151,12 +201,19 @@ public class SystemConfig implements Serializable {
         public void setOverloadUnit(String overloadUnit) { this.overloadUnit = overloadUnit; }
     }
 
-    // ---- 内部类：职位发布默认值 ----
+    // ---- Inner class: Position Defaults ----
+    /**
+     * Default values applied when an MO creates a new position.
+     */
     public static class PositionDefaults implements Serializable {
         private static final long serialVersionUID = 1L;
+        /** Default weekly hours. */
         private int defaultHours;
+        /** Default total TA slots. */
         private int defaultSlots;
+        /** Default application deadline date. */
         private String defaultDeadline;
+        /** Default "posted by" value. */
         private String defaultPostedBy;
 
         public PositionDefaults() {}
@@ -177,26 +234,43 @@ public class SystemConfig implements Serializable {
         public void setDefaultPostedBy(String defaultPostedBy) { this.defaultPostedBy = defaultPostedBy; }
     }
 
-    // ---- 内部类：数据追溯信息 ----
+    // ---- Inner class: Data Traceability ----
+    /**
+     * Holds file path and last-modified metadata for each persistent data file.
+     */
     public static class DataTraceability implements Serializable {
         private static final long serialVersionUID = 1L;
+        /** Path to positions.json. */
         private String positions;
+        /** Path to applications.json. */
         private String applications;
+        /** Path to applicants.json. */
         private String applicants;
+        /** Path to workloads.json. */
         private String workloads;
+        /** Path to users.json. */
         private String users;
+        /** Path to system_logs.json. */
         private String logs;
+        /** Path to mota_messages.json. */
+        private String motaMessages;
+        /** Path to workload_suggestion.json. */
+        private String workloadSuggestion;
+        /** Path to cv_uploads/ directory. */
         private String cvs;
 
         public DataTraceability() {}
         public DataTraceability(String positions, String applications, String applicants,
-                              String workloads, String users, String logs, String cvs) {
+                              String workloads, String users, String logs,
+                              String motaMessages, String workloadSuggestion, String cvs) {
             this.positions = positions;
             this.applications = applications;
             this.applicants = applicants;
             this.workloads = workloads;
             this.users = users;
             this.logs = logs;
+            this.motaMessages = motaMessages;
+            this.workloadSuggestion = workloadSuggestion;
             this.cvs = cvs;
         }
 
@@ -212,6 +286,10 @@ public class SystemConfig implements Serializable {
         public void setUsers(String users) { this.users = users; }
         public String getLogs() { return logs; }
         public void setLogs(String logs) { this.logs = logs; }
+        public String getMotaMessages() { return motaMessages; }
+        public void setMotaMessages(String motaMessages) { this.motaMessages = motaMessages; }
+        public String getWorkloadSuggestion() { return workloadSuggestion; }
+        public void setWorkloadSuggestion(String workloadSuggestion) { this.workloadSuggestion = workloadSuggestion; }
         public String getCvs() { return cvs; }
         public void setCvs(String cvs) { this.cvs = cvs; }
     }

@@ -4,19 +4,38 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Connects to DeepSeek API to generate match analysis for TA applicants.
- * Reads API key from the application's .env file.
+ * Connects to the Bailian (Qwen) API to generate match analysis for TA applicants
+ * and AI-powered workload rebalancing advice.
+ *
+ * <p>This service reads the API key from the application's {@code .env} file or
+ * the {@code DASHSCOPE_API_KEY} environment variable, caches results in memory
+ * to avoid repeated API calls for identical queries, and falls back gracefully
+ * to template-based explanations when the API is unavailable.</p>
+ *
+ * <p>Two main features:</p>
+ * <ul>
+ *   <li><strong>Match Analysis</strong> — generates a human-readable paragraph
+ *       explaining why a given applicant matches (or does not match) a position</li>
+ *   <li><strong>Workload Rebalancing</strong> — analyses current TA workloads,
+ *       identifies overloaded TAs, and suggests concrete adjustments</li>
+ * </ul>
+ *
+ * <p>This class is a singleton: obtain the instance via {@link #getInstance()}.</p>
+ *
+ * @see #generateMatchAnalysis(String, String, double, int, String, String, int, int, int, int, int)
+ * @see #generateWorkloadRebalanceAdvice(List, int)
  */
 public class LLMService {
 
-    private static final String DEEPSEEK_BASE_URL =
-        "https://api.deepseek.com/chat/completions";
-    private static final String DEEPSEEK_MODEL = "deepseek-chat";
+    private static final String BAILIAN_BASE_URL =
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    private static final String BAILIAN_MODEL = "qwen-plus";
 
     private static volatile LLMService instance;
     private static volatile String cachedApiKey;
@@ -35,7 +54,7 @@ public class LLMService {
     }
 
     /**
-     * Loads the DeepSeek API key from the application's .env file.
+     * Loads the Bailian (Qwen) API key from the application's .env file.
      * Looks for .env in the same directory as SmartTA.war is expanded,
      * then falls back to the catalina.base system property, then CLASSPATH.
      */
@@ -43,7 +62,7 @@ public class LLMService {
         if (cachedApiKey != null) return cachedApiKey;
 
         // Try environment variable first (works on most platforms / IDE runners)
-        String envKey = System.getenv("DEEPSEEK_API_KEY");
+        String envKey = System.getenv("DASHSCOPE_API_KEY");
         if (isNonEmpty(envKey)) {
             cachedApiKey = envKey.trim();
             return cachedApiKey;
@@ -69,7 +88,7 @@ public class LLMService {
                     if (eq > 0) {
                         String key = line.substring(0, eq).trim();
                         String val = line.substring(eq + 1).trim();
-                        if ("DEEPSEEK_API_KEY".equals(key) && isNonEmpty(val)) {
+                        if ("DASHSCOPE_API_KEY".equals(key) && isNonEmpty(val)) {
                             cachedApiKey = val;
                             return cachedApiKey;
                         }
@@ -82,7 +101,7 @@ public class LLMService {
     }
 
     /**
-     * Generates a human-readable match analysis using DeepSeek LLM.
+     * Generates a human-readable match analysis using Bailian (Qwen) LLM.
      * The result is cached by applicant+position so repeated calls are fast.
      *
      * @return a Chinese paragraph analysing why this applicant matches the position;
@@ -106,7 +125,7 @@ public class LLMService {
         }
 
         try {
-            String analysis = callDeepSeek(apiKey, applicantName, applicantSkills,
+            String analysis = callBailian(apiKey, applicantName, applicantSkills,
                     gpa, hoursAvailable, positionName, requiredSkills,
                     positionHours, skillScore, gpaScore, availScore, totalScore);
             cache.put(cacheKey, analysis);
@@ -119,7 +138,7 @@ public class LLMService {
         }
     }
 
-    private String callDeepSeek(String apiKey,
+    private String callBailian(String apiKey,
             String applicantName, String applicantSkills,
             double gpa, int hoursAvailable,
             String positionName, String requiredSkills,
@@ -139,9 +158,9 @@ public class LLMService {
               "max_tokens": 400,
               "temperature": 0.3
             }
-            """, DEEPSEEK_MODEL, escapeJson(prompt));
+            """, BAILIAN_MODEL, escapeJson(prompt));
 
-        HttpURLConnection conn = (HttpURLConnection) new URL(DEEPSEEK_BASE_URL).openConnection();
+        HttpURLConnection conn = (HttpURLConnection) new URL(BAILIAN_BASE_URL).openConnection();
         try {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
@@ -156,10 +175,10 @@ public class LLMService {
 
             int httpCode = conn.getResponseCode();
             if (httpCode == 401) {
-                throw new IOException("DeepSeek API key is invalid or unauthorized (401)");
+                throw new IOException("Bailian API key is invalid or unauthorized (401)");
             }
             if (httpCode != 200) {
-                throw new IOException("DeepSeek API returned HTTP " + httpCode);
+                throw new IOException("Bailian API returned HTTP " + httpCode);
             }
 
             StringBuilder response = new StringBuilder();
@@ -278,82 +297,97 @@ public class LLMService {
     // ============================================================
 
     /**
-     * 工作负载再平衡建议缓存 Key。
-     * 相同工时快照产生相同建议，避免重复 API 调用。
+     * Cache key prefix for workload rebalancing suggestions.
+     * Identical workload snapshots produce identical advice, avoiding redundant API calls.
      */
     private static final String WORKLOAD_CACHE_KEY = "workload_rebalance_v1";
 
     /**
-     * 内部：一条 TA 工时记录。
+     * Internal record representing a single TA's workload entry.
      */
     public static class WorkloadEntry {
         public final String taApplicantId;
         public final String taDisplayName;
         public final String taUsername;
         public final int currentHours;
+        /** List of the TA's accepted positions (code -> hours per week). */
+        public final Map<String, Integer> positions; // positionCode -> hoursPerWeek
 
         public WorkloadEntry(String taApplicantId, String taDisplayName,
-                             String taUsername, int currentHours) {
+                             String taUsername, int currentHours,
+                             Map<String, Integer> positions) {
             this.taApplicantId = taApplicantId;
             this.taDisplayName = taDisplayName;
             this.taUsername = taUsername;
             this.currentHours = currentHours;
+            this.positions = positions != null ? new HashMap<>(positions) : new HashMap<>();
         }
     }
 
     /**
-     * DeepSeek 返回的再平衡建议。
-     * action: "reduce" | "no_action"
-     * targetApplicantId: 要调整工时的 TA ID（可为 null）
-     * targetHours: 建议目标工时（可为 null）
-     * reasoning: 中文推理说明
-     * summary: 摘要（供 UI 显示）
+     * AI-powered workload rebalancing advice returned by the Bailian LLM.
+     *
+     * @param action              "reduce" or "no_action"
+     * @param targetApplicantId   ID of the overloaded TA (may be null)
+     * @param targetDisplayName   Display name of the target TA (may be null)
+     * @param targetPositionCode  Code of the position the AI recommends removing (may be null)
+     * @param targetPositionName  Name of the position the AI recommends removing (may be null)
+     * @param targetHoursDelta    How many hours the removal saves (may be null)
+     * @param reasoning           English reasoning explaining the recommendation
+     * @param summary             Concise summary for UI display
      */
     public static class RebalanceAdvice {
         public final String action;
         public final String targetApplicantId;
         public final String targetDisplayName;
-        public final Integer targetHours;
+        public final String targetPositionCode;
+        public final String targetPositionName;
+        public final Integer targetHoursDelta;
         public final String reasoning;
         public final String summary;
 
         public RebalanceAdvice(String action, String targetApplicantId,
-                               String targetDisplayName, Integer targetHours,
+                               String targetDisplayName, String targetPositionCode,
+                               String targetPositionName, Integer targetHoursDelta,
                                String reasoning, String summary) {
             this.action = action;
             this.targetApplicantId = targetApplicantId;
             this.targetDisplayName = targetDisplayName;
-            this.targetHours = targetHours;
+            this.targetPositionCode = targetPositionCode;
+            this.targetPositionName = targetPositionName;
+            this.targetHoursDelta = targetHoursDelta;
             this.reasoning = reasoning;
             this.summary = summary;
         }
     }
 
     /**
-     * 调用 DeepSeek 生成工作负载再平衡建议。
-     * 仅在有过载 TA 时调用；无过载时返回 no_action。
-     * 失败时返回 null Caller 应回退到固定规则。
+     * Requests AI-powered workload rebalancing advice from the Bailian LLM.
      *
-     * @param entries    当前所有 TA 的工时数据
-     * @param capacity    安全工时上限（如 20 h/week）
-     * @return            DeepSeek 建议，或 null（API 不可用）
+     * <p>Only calls the API when overloaded TAs are detected; otherwise returns
+     * {@code no_action} immediately. On API failure, returns {@code null} and the
+     * caller should fall back to fixed business rules.</p>
+     *
+     * @param entries  current workload data for all TAs
+     * @param capacity safe weekly hours upper limit (e.g., 20 h/week)
+     * @return Bailian advice, or {@code null} if the API is unavailable
      */
     public RebalanceAdvice generateWorkloadRebalanceAdvice(
             List<WorkloadEntry> entries, int capacity) {
 
         if (entries == null || entries.isEmpty()) {
-            return new RebalanceAdvice("no_action", null, null, null,
-                    "无 TA 数据", "暂无数据，无需调整");
+            return new RebalanceAdvice("no_action", null, null, null, null, null,
+                    "No TA data available", "No data — no adjustment needed.");
         }
 
-        // 检查是否有过载 TA
+        // Check for overloaded TAs
         List<WorkloadEntry> overloaded = entries.stream()
                 .filter(e -> e.currentHours > capacity)
                 .toList();
 
         if (overloaded.isEmpty()) {
-            return new RebalanceAdvice("no_action", null, null, null,
-                    "所有 TA 工时均在安全范围内", "当前所有 TA 工时均在 " + capacity + "h/week 安全范围内，无需调整");
+            return new RebalanceAdvice("no_action", null, null, null, null, null,
+                    "All TAs within safe range", "All TAs are within the " + capacity + "h/week safe range — no adjustment needed.");
         }
 
         String cacheKey = WORKLOAD_CACHE_KEY + "_"
@@ -367,30 +401,30 @@ public class LLMService {
 
         String apiKey = loadApiKey();
         if (apiKey == null || apiKey.isEmpty()) {
-            return null; // Caller 回退到固定规则
+            return null; // Caller falls back to fixed rules
         }
 
         try {
-            RebalanceAdvice advice = callDeepSeekWorkload(apiKey, entries, capacity, overloaded);
+            RebalanceAdvice advice = callBailianWorkload(apiKey, entries, capacity, overloaded);
             if (advice != null) {
                 cache.put(cacheKey, "AI|" + serializeAdvice(advice));
             }
             return advice;
         } catch (Exception e) {
             System.err.println("[LLMService] Workload rebalance API failed: " + e.getMessage());
-            return null; // Caller 回退到固定规则
+            return null; // Caller falls back to fixed rules
         }
     }
 
-    private RebalanceAdvice callDeepSeekWorkload(String apiKey,
+    private RebalanceAdvice callBailianWorkload(String apiKey,
             List<WorkloadEntry> entries, int capacity,
             List<WorkloadEntry> overloaded) throws IOException {
 
-        // 构建 TA 列表文本
+        // Build TA list text
         StringBuilder taList = new StringBuilder();
         for (WorkloadEntry e : entries) {
             String status = e.currentHours > capacity
-                    ? "【过载】" + e.currentHours + "h"
+                    ? "[OVERLOAD] " + e.currentHours + "h"
                     : e.currentHours + "h";
             taList.append(String.format("  - %s(@%s): %s\n",
                     e.taDisplayName, e.taUsername, status));
@@ -412,7 +446,7 @@ public class LLMService {
             【All TA Workloads】
             %s
 
-            【Overloaded TAs】
+            【Overloaded TAs (current > %d hours)】
             %s
 
             Please output ONLY in the following JSON format (output JSON only, no other text):
@@ -420,17 +454,19 @@ public class LLMService {
               "action": "reduce" | "no_action",
               "targetApplicantId": "The applicantId of the overloaded TA (e.g. A001), null if action is no_action",
               "targetDisplayName": "Full name of the overloaded TA, null if no_action",
-              "targetHours": An integer target hours (>= 0), null if no_action,
-              "reasoning": "Your reasoning in English (within 100 words), explain why this TA and the suggested value",
+              "targetPositionCode": "The position code this TA should give up (e.g. CST302), null if no_action",
+              "targetPositionName": "Full name of the position to give up, null if no_action",
+              "targetHoursDelta": An integer (hours saved by removing that position), null if no_action",
+              "reasoning": "Your reasoning in English (within 120 words), explain why this TA should remove this specific position",
               "summary": "A concise summary for the administrator in English (within 50 words)"
             }
 
             Notes:
             - Only output "reduce" when there are overloaded TAs
-            - targetHours should be >= 0 and <= capacity
-            - Prioritize adjusting overloaded TAs to the safe capacity value
-            - Only output one recommendation (the TA most in need of adjustment)
-            """, capacity, taList.toString().trim(), overloadList.toString().trim());
+            - Choose ONE position to remove from ONE overloaded TA that best reduces their workload
+            - The targetPositionCode MUST be a position the target TA currently holds (from their accepted positions list above)
+            - Only output one recommendation (the TA most in need of adjustment, and ONE position)
+            """, capacity, taList.toString().trim(), capacity, overloadList.toString().trim());
 
         String jsonBody = String.format("""
             {
@@ -438,12 +474,12 @@ public class LLMService {
               "messages": [
                 {"role": "user", "content": %s}
               ],
-              "max_tokens": 350,
+              "max_tokens": 450,
               "temperature": 0.2
             }
-            """, DEEPSEEK_MODEL, escapeJson(prompt));
+            """, BAILIAN_MODEL, escapeJson(prompt));
 
-        HttpURLConnection conn = (HttpURLConnection) new URL(DEEPSEEK_BASE_URL).openConnection();
+        HttpURLConnection conn = (HttpURLConnection) new URL(BAILIAN_BASE_URL).openConnection();
         try {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
@@ -458,10 +494,10 @@ public class LLMService {
 
             int httpCode = conn.getResponseCode();
             if (httpCode == 401) {
-                throw new IOException("DeepSeek API key invalid (401)");
+                throw new IOException("Bailian API key invalid (401)");
             }
             if (httpCode != 200) {
-                throw new IOException("DeepSeek API HTTP " + httpCode);
+                throw new IOException("Bailian API HTTP " + httpCode);
             }
 
             StringBuilder response = new StringBuilder();
@@ -484,13 +520,12 @@ public class LLMService {
     }
 
     /**
-     * 解析 LLM 返回的 JSON 建议。
-     * 对格式偏差有一定容错能力。
+     * Parses a JSON advice object returned by the LLM.
+     * Has moderate tolerance for format deviations.
      */
     private RebalanceAdvice parseAdviceFromLLM(String content) {
         try {
             content = content.trim();
-            // 去掉可能的 markdown 代码块标记
             if (content.startsWith("```")) {
                 int firstNewline = content.indexOf('\n');
                 if (firstNewline >= 0) content = content.substring(firstNewline + 1).trim();
@@ -498,25 +533,28 @@ public class LLMService {
                 if (lastBacktick >= 0) content = content.substring(0, lastBacktick).trim();
             }
 
-            // 提取各字段（正则容错）
             String action = extractJsonField(content, "action");
             String targetId = extractJsonField(content, "targetApplicantId");
             if (targetId != null && (targetId.equals("null") || targetId.isEmpty())) targetId = null;
             String targetName = extractJsonField(content, "targetDisplayName");
             if (targetName != null && (targetName.equals("null") || targetName.isEmpty())) targetName = null;
-            String hoursStr = extractJsonField(content, "targetHours");
-            Integer hours = null;
-            if (hoursStr != null && !hoursStr.equals("null") && !hoursStr.isEmpty()) {
-                try { hours = Integer.parseInt(hoursStr.replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
+            String targetPosCode = extractJsonField(content, "targetPositionCode");
+            if (targetPosCode != null && (targetPosCode.equals("null") || targetPosCode.isEmpty())) targetPosCode = null;
+            String targetPosName = extractJsonField(content, "targetPositionName");
+            if (targetPosName != null && (targetPosName.equals("null") || targetPosName.isEmpty())) targetPosName = null;
+            String hoursDeltaStr = extractJsonField(content, "targetHoursDelta");
+            Integer hoursDelta = null;
+            if (hoursDeltaStr != null && !hoursDeltaStr.equals("null") && !hoursDeltaStr.isEmpty()) {
+                try { hoursDelta = Integer.parseInt(hoursDeltaStr.replaceAll("[^0-9-]", "")); } catch (Exception ignored) {}
             }
             String reasoning = extractJsonField(content, "reasoning");
             String summary = extractJsonField(content, "summary");
 
             return new RebalanceAdvice(
                     action != null ? action : "reduce",
-                    targetId, targetName, hours,
+                    targetId, targetName, targetPosCode, targetPosName, hoursDelta,
                     reasoning != null ? reasoning : "",
-                    summary != null ? summary : "请查看详情");
+                    summary != null ? summary : "Please review the details.");
         } catch (Exception e) {
             System.err.println("[LLMService] Failed to parse workload advice: " + e.getMessage());
             return null;
@@ -534,7 +572,7 @@ public class LLMService {
         if (start >= json.length()) return null;
         char c = json.charAt(start);
         if (c == '"') {
-            // 字符串
+            // String value
             int end = start + 1;
             while (end < json.length()) {
                 if (json.charAt(end) == '\\') { end += 2; continue; }
@@ -545,7 +583,7 @@ public class LLMService {
         } else if (c == 'n' && json.substring(start).startsWith("null")) {
             return "null";
         } else {
-            // 数字
+            // Numeric value
             int end = start;
             while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-' || json.charAt(end) == '.')) end++;
             return json.substring(start, end);
@@ -555,19 +593,23 @@ public class LLMService {
     private String serializeAdvice(RebalanceAdvice a) {
         return a.action + "|" + (a.targetApplicantId != null ? a.targetApplicantId : "")
                 + "|" + (a.targetDisplayName != null ? a.targetDisplayName : "")
-                + "|" + (a.targetHours != null ? a.targetHours : "")
+                + "|" + (a.targetPositionCode != null ? a.targetPositionCode : "")
+                + "|" + (a.targetPositionName != null ? a.targetPositionName : "")
+                + "|" + (a.targetHoursDelta != null ? a.targetHoursDelta : "")
                 + "|" + (a.reasoning != null ? a.reasoning : "")
                 + "|" + (a.summary != null ? a.summary : "");
     }
 
     private RebalanceAdvice parseCachedAdvice(String cached) {
-        String[] parts = cached.substring(3).split("\\|", 6);
+        String[] parts = cached.substring(3).split("\\|", 8);
         return new RebalanceAdvice(
                 parts.length > 0 ? parts[0] : "no_action",
                 parts.length > 1 && !parts[1].isEmpty() ? parts[1] : null,
                 parts.length > 2 && !parts[2].isEmpty() ? parts[2] : null,
-                parts.length > 3 && !parts[3].isEmpty() ? Integer.parseInt(parts[3]) : null,
-                parts.length > 4 ? parts[4] : "",
-                parts.length > 5 ? parts[5] : "");
+                parts.length > 3 && !parts[3].isEmpty() ? parts[3] : null,
+                parts.length > 4 && !parts[4].isEmpty() ? parts[4] : null,
+                parts.length > 5 && !parts[5].isEmpty() ? Integer.parseInt(parts[5]) : null,
+                parts.length > 6 ? parts[6] : "",
+                parts.length > 7 ? parts[7] : "");
     }
 }

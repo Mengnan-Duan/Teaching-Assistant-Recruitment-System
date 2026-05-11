@@ -10,15 +10,52 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * Central REST API servlet handling all business operations for the Smart-TA platform.
+ *
+ * <p>This servlet serves as the primary API endpoint ({@code /api/*}) and dispatches
+ * requests to appropriate handler methods based on the path info. It enforces role-based
+ * access control (TA, MO, ADMIN), validates input parameters, manages application
+ * status transitions, generates AI match scores, integrates with the Bailian (Qwen) LLM
+ * for applicant analysis and workload rebalancing, and persists all data through the
+ * {@link com.bupt.smartta.util.DataStore}.</p>
+ *
+ * <p>Key API endpoints handled:</p>
+ * <ul>
+ *   <li>{@code GET /api/config} — return system configuration</li>
+ *   <li>{@code GET /api/positions} — list all positions</li>
+ *   <li>{@code POST /api/positions} — create a new position (MO/ADMIN)</li>
+ *   <li>{@code GET /api/applications} — list applications (filtered by role)</li>
+ *   <li>{@code POST /api/applications} — submit a new application (TA)</li>
+ *   <li>{@code PUT /api/applications/:id} — update application status (MO/ADMIN)</li>
+ *   <li>{@code GET /api/applicants} — list all TA applicants</li>
+ *   <li>{@code PUT /api/applicants/:id} — update TA applicant profile</li>
+ *   <li>{@code GET /api/users} — list users (ADMIN only)</li>
+ *   <li>{@code GET /api/workloads} — get TA workload data</li>
+ *   <li>{@code PUT /api/workloads/:id} — update TA workload</li>
+ *   <li>{@code POST /api/rebalance} — request AI-powered workload rebalancing advice</li>
+ *   <li>{@code GET /api/logs} — retrieve system audit logs</li>
+ *   <li>{@code GET /api/messages} / {@code POST /api/messages} — MO-TA messaging</li>
+ * </ul>
+ *
+ * @see com.bupt.smartta.util.DataStore
+ * @see com.bupt.smartta.util.LLMService
+ */
 public class ApiServlet extends HttpServlet {
 
     private final DataStore ds = DataStore.getInstance();
     private final LLMService llmService = LLMService.getInstance();
 
-    /** 合法的申请状态值 */
+    /** Set of valid application status values. */
     private static final Set<String> VALID_STATUSES = Set.of(
         Application.STATUS_SUBMITTED,
         Application.STATUS_REVIEW,
@@ -26,47 +63,64 @@ public class ApiServlet extends HttpServlet {
         Application.STATUS_REJECTED
     );
 
-    /** 状态流转规则：key = 当前状态，value = 允许的下一状态集合 */
+    /**
+     * Status transition rules: key = current status, value = set of allowed next statuses.
+     * MOs may skip "Under Review" and accept directly from "Submitted".
+     * Accepted TAs may be rolled back to "Rejected" to release their slot.
+     */
     private static final Map<String, Set<String>> ALLOWED_TRANSITIONS;
     static {
         Map<String, Set<String>> m = new HashMap<>();
-        m.put(Application.STATUS_SUBMITTED, Set.of(Application.STATUS_REVIEW));
+        m.put(Application.STATUS_SUBMITTED, Set.of(Application.STATUS_REVIEW, Application.STATUS_ACCEPTED));
         m.put(Application.STATUS_REVIEW,    Set.of(Application.STATUS_ACCEPTED, Application.STATUS_REJECTED));
-        // MO 可将已录用 TA 退回（释放席位），仅限其本人发布的职位
         m.put(Application.STATUS_ACCEPTED,  Set.of(Application.STATUS_REJECTED));
         ALLOWED_TRANSITIONS = Collections.unmodifiableMap(m);
     }
 
-    /** 工作量有效范围 */
+    /** Minimum and maximum valid values for workload hours. */
     private static final int MIN_HOURS = 0;
     private static final int MAX_HOURS = 168; // 24h * 7
 
+    /** Maximum allowed lengths for string input parameters (prevents DoS). */
+    private static final int MAX_STRING_LENGTH = 512;
+    private static final int MAX_NAME_LENGTH = 128;
+    private static final int MAX_CODE_LENGTH = 32;
+    private static final int MAX_EMAIL_LENGTH = 128;
+
+    /**
+     * Validates that a string parameter does not exceed the maximum allowed length.
+     * Used to prevent excessively long inputs from causing DoS or storage issues.
+     */
+    private boolean isValidLength(String s, int maxLen) {
+        return s != null && s.length() <= maxLen;
+    }
+
     // ============================================================
-    // 工具方法：路径安全校验
+    // Utility: path safety check
     // ============================================================
 
     /**
-     * 校验 action 参数不包含路径穿越字符。
-     * 防止 /api/../../../etc/passwd 这类攻击。
+     * Validates that the action parameter contains no path-traversal characters.
+     * Prevents attacks like /api/../../../etc/passwd.
      */
     private boolean isValidAction(String action) {
         if (action == null || action.isEmpty()) return false;
-        // 禁止路径穿越、绝对路径、反斜杠
+        // Block path traversal, absolute paths, and backslashes
         if (action.contains("..") || action.startsWith("/") || action.startsWith("\\")
                 || action.contains("./") || action.contains(".\\")) {
             return false;
         }
-        // 只能是字母、数字、下划线、短横线
+        // Only allow letters, digits, underscores, hyphens
         return Pattern.matches("^[a-zA-Z0-9_-]+$", action);
     }
 
     // ============================================================
-    // 工具方法：角色权限校验
+    // Utility: role permission check
     // ============================================================
 
     /**
-     * 校验当前会话用户是否持有指定角色之一。
-     * @param roles 允许的角色（MO、ADMIN 等）
+     * Checks if the current session user holds one of the specified roles.
+     * @param roles Allowed roles (MO, ADMIN, etc.)
      */
     private boolean hasRole(HttpServletRequest req, String... roles) {
         HttpSession session = req.getSession(false);
@@ -80,7 +134,7 @@ public class ApiServlet extends HttpServlet {
     }
 
     /**
-     * 是否具备管理员权限：当前视图角色为 ADMIN，或账号在库中持有 ADMIN（支持多管理员、与「当前扮演角色」解耦）。
+     * Checks if the user has admin capability: current view role is ADMIN, or the account holds ADMIN in the database (supports multi-admin, decoupled from current view role).
      */
     private boolean hasAdminCapability(HttpServletRequest req) {
         if (hasRole(req, "ADMIN")) return true;
@@ -93,7 +147,7 @@ public class ApiServlet extends HttpServlet {
     }
 
     /**
-     * 校验当前会话是否已登录。
+     * Checks if the current session is authenticated.
      */
     private boolean isAuthenticated(HttpServletRequest req) {
         HttpSession session = req.getSession(false);
@@ -105,7 +159,7 @@ public class ApiServlet extends HttpServlet {
         return s == null ? null : (String) s.getAttribute("username");
     }
 
-    /** MO 是否管理该申请对应的职位（按 postedByUsername 或 Posted By 显示名） */
+    /** Checks if MO manages the position corresponding to this application (by postedByUsername or Posted By display name) */
     private boolean moCanManageApplication(HttpServletRequest req, Application target) {
         if (hasAdminCapability(req)) return true;
         if (!hasRole(req, "MO")) return false;
@@ -132,7 +186,7 @@ public class ApiServlet extends HttpServlet {
         return mo != null ? mo.getUsername() : null;
     }
 
-    /** TA 是否已被当前 MO 发布的职位录用 */
+    /** Checks if the TA has been accepted for any position published by the current MO */
     private boolean isTaOfMo(String applicantId, String moUsername) {
         if (applicantId == null || moUsername == null) return false;
         User mo = ds.getUserByUsername(moUsername);
@@ -165,7 +219,7 @@ public class ApiServlet extends HttpServlet {
         return false;
     }
 
-    /** MO 发布的所有职位（含历史）中，该申请者是否有任意状态的申请记录 */
+    /** Whether this applicant has any application record (any status) for any position published by the current MO */
     private boolean moHasApplicationWith(String applicantId, String moUsername) {
         if (applicantId == null || moUsername == null) return false;
         for (Application a : ds.getApplications()) {
@@ -191,7 +245,7 @@ public class ApiServlet extends HttpServlet {
     }
 
     // ============================================================
-    // 工具方法：响应输出
+    // Utility: response output
     // ============================================================
 
     private void sendError(HttpServletResponse resp, int code, String message) throws IOException {
@@ -208,7 +262,7 @@ public class ApiServlet extends HttpServlet {
     }
 
     // ============================================================
-    // HTTP 方法分发
+    // HTTP method dispatch
     // ============================================================
 
     @Override
@@ -228,10 +282,36 @@ public class ApiServlet extends HttpServlet {
             sendError(resp, 400, "Missing action parameter");
             return;
         }
-        // P0-1: 路径穿越防护
+        // P0-1: Path traversal protection
         if (!isValidAction(action)) {
             sendError(resp, 400, "Invalid action parameter");
             return;
+        }
+
+        // Public endpoints (no login required)
+        Set<String> publicActions = Set.of(
+            "positions", "allPositions", "applicants",
+            "config", "score", "llmanalysis"
+        );
+
+        // Authenticated endpoints (no special permission required)
+        Set<String> authRequiredActions = Set.of(
+            "applications", "users", "logs", "workloads",
+            "workloadEntries", "myProfile", "myTas",
+            "pendingApplicants", "myPositions", "moTaThreads",
+            "taMoMessages", "messageUnread"
+        );
+
+        if (!publicActions.contains(action) && !authRequiredActions.contains(action)) {
+            // Unknown endpoints go to subsequent checks (may be /api/debug or other admin endpoint)
+        }
+
+        // Authenticated endpoint check
+        if (authRequiredActions.contains(action)) {
+            if (!isAuthenticated(req)) {
+                sendError(resp, 403, "Login required");
+                return;
+            }
         }
 
         StringBuilder sb = new StringBuilder();
@@ -240,11 +320,11 @@ public class ApiServlet extends HttpServlet {
             case "positions":
                 sb.append("{\"positions\":[");
                 List<Position> positions = ds.getPositions();
-                // 修复2: 如果当前用户同时是TA和MO，不显示自己作为MO发布的职位
+                // Fix 2: If current user is both TA and MO, do not show positions they published as MO
                 String taUsername = sessionUsername(req);
                 User taUser = taUsername != null ? ds.getUserByUsername(taUsername) : null;
                 boolean isAlsoMo = taUser != null && taUser.hasRole("MO");
-                // 修复4: 过滤掉当前TA已有申请的职位（无论状态如何均不再出现，避免前端未刷新的竞态）
+                // Fix 4: Filter out positions the current TA has already applied to (never shown regardless of status, avoids race condition with unrefreshed frontend)
                 List<Application> myApps = new ArrayList<>();
                 if (taUser != null && taUser.getApplicantId() != null) {
                     for (Application a : ds.getApplications()) {
@@ -256,16 +336,21 @@ public class ApiServlet extends HttpServlet {
                 boolean firstPos = true;
                 for (int i = 0; i < positions.size(); i++) {
                     Position pos = positions.get(i);
-                    // 如果该职位是自己发布的（通过postedByUsername判断），且自己也是MO，则过滤掉
+                    // If this position was published by the current user (via postedByUsername) and they are also an MO, filter it out
                     if (isAlsoMo && pos.getPostedByUsername() != null
                             && pos.getPostedByUsername().equalsIgnoreCase(taUsername)) {
                         continue;
                     }
-                    // 过滤掉已有申请的职位
+                    // Filter out positions with existing applications (but if the application was rejected by MO and TA has viewed the details and is not permanently blocked, do not filter, allow re-application)
                     boolean hasApp = false;
                     for (Application a : myApps) {
                         if (a.getPositionCode().equalsIgnoreCase(pos.getCode())) {
-                            hasApp = true;
+                            // Filter out: applications not yet rejected by MO, applications still under review, or permanently blocked applications
+                            if (!Application.STATUS_REJECTED.equals(a.getStatus())
+                                    || !a.isRejectedByMo()
+                                    || a.isPermanentlyBlocked()) {
+                                hasApp = true;
+                            }
                             break;
                         }
                     }
@@ -273,6 +358,60 @@ public class ApiServlet extends HttpServlet {
                     if (!firstPos) sb.append(",");
                     sb.append(positionToJson(pos));
                     firstPos = false;
+                }
+                sb.append("]}");
+                break;
+
+            case "debug":
+                {
+                    // Debug endpoint - admin only
+                    if (!hasAdminCapability(req)) {
+                        sendError(resp, 403, "Administrator access required");
+                        return;
+                    }
+                    String dataDir = ds.getDataDir();
+                    java.io.File posFile = new java.io.File(dataDir + java.io.File.separator + "positions.json");
+                    boolean posFileExists = posFile.exists();
+                    String posFileContent = "";
+                    if (posFileExists) {
+                        try {
+                            posFileContent = java.nio.file.Files.readString(posFile.toPath());
+                            if (posFileContent.length() > 500) posFileContent = posFileContent.substring(0, 500) + "...";
+                        } catch (Exception e) {
+                            posFileContent = "ERROR: " + e.getMessage();
+                        }
+                    }
+                    // Test direct Jackson deserialization
+                    String directParse = "";
+                    try {
+                        com.fasterxml.jackson.databind.ObjectMapper testMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                        testMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+                        testMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+                        java.util.List<com.bupt.smartta.model.Position> testList =
+                            testMapper.readValue(posFile,
+                                testMapper.getTypeFactory().constructCollectionType(java.util.ArrayList.class, com.bupt.smartta.model.Position.class));
+                        directParse = "SUCCESS, count=" + testList.size();
+                    } catch (Exception e) {
+                        directParse = "FAILED: " + e.getClass().getSimpleName() + " - " + e.getMessage();
+                    }
+                    sb.append("{\"debug\":{");
+                    sb.append("\"dataDir\":\"").append(esc(dataDir)).append("\",");
+                    sb.append("\"positionsFileExists\":").append(posFileExists).append(",");
+                    sb.append("\"directParse\":\"").append(esc(directParse)).append("\",");
+                    sb.append("\"positionsCount\":").append(ds.getPositions().size()).append(",");
+                    sb.append("\"applicantsCount\":").append(ds.getApplicants().size()).append(",");
+                    sb.append("\"usersCount\":").append(ds.getUsers().size());
+                    sb.append("}}");
+                }
+                break;
+
+            case "allPositions":
+                // Unfiltered version, used exclusively by the admin Recruitment Summary page
+                sb.append("{\"positions\":[");
+                List<Position> allPos = ds.getPositions();
+                for (int i = 0; i < allPos.size(); i++) {
+                    if (i > 0) sb.append(",");
+                    sb.append(positionToJson(allPos.get(i)));
                 }
                 sb.append("]}");
                 break;
@@ -305,8 +444,8 @@ public class ApiServlet extends HttpServlet {
                 sb.append("]}");
                 break;
 
-            // P0-8: users API — 管理员见 MO/TA 目录；普通登录用户仅见自身一条（供 TA 页兜底 applicantId）
-            // 修复1: Admin在MO&TA Directory中不显示自己（管理员本人不应出现在目录列表中）
+            // P0-8: users API — admin sees MO/TA directory; regular logged-in users see only their own entry (as fallback for TA page applicantId)
+            // Fix 1: Admin does not show themselves in MO&TA Directory (admin should not appear in the directory list)
             case "users":
                 if (!isAuthenticated(req)) {
                     sendError(resp, 403, "Login required");
@@ -321,7 +460,7 @@ public class ApiServlet extends HttpServlet {
                         User u = allUsers.get(i);
                         if (u == null) continue;
                         if (!u.hasRole("MO") && !u.hasRole("TA")) continue;
-                        // 排除当前登录的Admin本人
+                        // Exclude the currently logged-in admin
                         if (u.getUsername() != null && u.getUsername().equalsIgnoreCase(currentSessionUsername)) continue;
                         if (!firstUser) sb.append(",");
                         sb.append(userToJsonForDirectory(u));
@@ -339,6 +478,10 @@ public class ApiServlet extends HttpServlet {
                 break;
 
             case "logs":
+                if (!isAuthenticated(req)) {
+                    sendError(resp, 403, "Login required");
+                    return;
+                }
                 sb.append("{\"logs\":[");
                 List<SystemLog> logs = ds.getLogs();
                 int logLimit = Math.min(logs.size(), 50);
@@ -352,7 +495,7 @@ public class ApiServlet extends HttpServlet {
             case "workloads":
                 sb.append("{\"workloads\":{");
                 Map<String, Integer> workloads = ds.getWorkloadHours();
-                // 返回与 TA 用户账户关联的申请者工作量
+                // Returns workload for the TA user account linked to the applicant
                 List<User> allUsersForWorkload = ds.getUsers();
                 boolean first = true;
                 for (User u : allUsersForWorkload) {
@@ -370,7 +513,7 @@ public class ApiServlet extends HttpServlet {
                 sb.append("}}");
                 break;
 
-            // 工作量详情（返回 entries 数组供前端直接使用）
+            // Workload details (returns entries array for direct frontend use)
             case "workloadEntries":
                 sb.append("{\"workloadEntries\":[");
                 Map<String, Integer> wloadMap = ds.getWorkloadHours();
@@ -510,7 +653,7 @@ public class ApiServlet extends HttpServlet {
                 handleGetMessageUnread(req, sb);
                 break;
 
-            // MO专属：返回当前MO负责的课程列表（按postedByUsername过滤）
+            // MO-only: returns the list of courses managed by the current MO (filtered by postedByUsername)
             case "moPositions":
                 if (!isAuthenticated(req) || !hasRole(req, "MO")) {
                     sendError(resp, 403, "MO role required");
@@ -528,6 +671,25 @@ public class ApiServlet extends HttpServlet {
                     firstMoPos = false;
                 }
                 sb.append("]}");
+                break;
+
+            case "moProfile":
+                if (!isAuthenticated(req) || !hasRole(req, "MO")) {
+                    sendError(resp, 403, "MO role required");
+                    return;
+                }
+                {
+                    String mpUser = sessionUsername(req);
+                    User mpU = ds.getUserByUsername(mpUser);
+                    if (mpU == null) {
+                        sendError(resp, 500, "User not found");
+                        return;
+                    }
+                    sb.append("{\"success\":true,");
+                    sb.append("\"username\":\"").append(esc(mpU.getUsername())).append("\",");
+                    sb.append("\"displayName\":\"").append(esc(mpU.getDisplayName() != null ? mpU.getDisplayName() : "")).append("\",");
+                    sb.append("\"email\":\"").append(esc(mpU.getEmail() != null ? mpU.getEmail() : "")).append("\"}");
+                }
                 break;
 
             default:
@@ -552,7 +714,7 @@ public class ApiServlet extends HttpServlet {
         }
         String action = path.substring(1);
 
-        // P0-1: 路径穿越防护
+        // P0-1: Path traversal protection
         if (!isValidAction(action)) {
             sendError(resp, 400, "Invalid action parameter");
             return;
@@ -565,10 +727,15 @@ public class ApiServlet extends HttpServlet {
                 handleApply(req, sb);
                 break;
             case "applicant":
+                // Only TA (own profile save) or ADMIN can modify applicant data
+                if (!hasRole(req, "TA", "ADMIN")) {
+                    sendError(resp, 403, "Insufficient permissions: TA or ADMIN role required");
+                    return;
+                }
                 handleCreateApplicant(req, sb);
                 break;
             case "position":
-                // P0-2: 只有 MO/ADMIN 可以发布/更新职位
+                // P0-2: Only MO/ADMIN can publish/update positions
                 if (!hasRole(req, "MO", "ADMIN")) {
                     sendError(resp, 403, "Insufficient permissions: MO or ADMIN role required");
                     return;
@@ -576,7 +743,7 @@ public class ApiServlet extends HttpServlet {
                 handlePositionCreateOrUpdate(req, sb);
                 break;
             case "positionDelete":
-                // 删除职位
+                // Delete position
                 if (!hasRole(req, "MO", "ADMIN")) {
                     sendError(resp, 403, "Insufficient permissions: MO or ADMIN role required");
                     return;
@@ -584,7 +751,7 @@ public class ApiServlet extends HttpServlet {
                 handleDeletePosition(req, sb);
                 break;
             case "updateStatus":
-                // P0-2: 只有 MO/ADMIN 可以审核申请
+                // P0-2: Only MO/ADMIN can review applications
                 if (!hasRole(req, "MO", "ADMIN")) {
                     sendError(resp, 403, "Insufficient permissions: MO or ADMIN role required");
                     return;
@@ -592,7 +759,7 @@ public class ApiServlet extends HttpServlet {
                 handleUpdateStatus(req, sb);
                 break;
             case "workload":
-                // P0-2: 仅管理员（含账号级 ADMIN）可修改工作量
+                // P0-2: Only admin (including account-level ADMIN) can modify workload
                 if (!hasAdminCapability(req)) {
                     sendError(resp, 403, "Insufficient permissions: administrator access required");
                     return;
@@ -606,7 +773,23 @@ public class ApiServlet extends HttpServlet {
                 }
                 handleRebalanceWorkload(sb);
                 break;
-            // P0-7: 修复缺失的 quota 路由注册
+            case "workloadSuggestion":
+                // TA gets the current pending AI workload adjustment suggestion
+                if (!isAuthenticated(req) || !hasRole(req, "TA")) {
+                    sendError(resp, 403, "TA role required");
+                    return;
+                }
+                handleGetWorkloadSuggestion(req, sb);
+                break;
+            case "workloadSuggestionResponse":
+                // TA confirms or dismisses the AI suggestion
+                if (!isAuthenticated(req) || !hasRole(req, "TA")) {
+                    sendError(resp, 403, "TA role required");
+                    return;
+                }
+                handleWorkloadSuggestionResponse(req, sb);
+                break;
+            // P0-7: Fix missing quota route registration
             case "quota":
                 if (!hasRole(req, "MO", "ADMIN")) {
                     sendError(resp, 403, "Insufficient permissions: MO or ADMIN role required");
@@ -615,7 +798,7 @@ public class ApiServlet extends HttpServlet {
                 handleUpdateQuota(req, sb);
                 break;
             case "user":
-                // 用户管理（admin 页面使用）
+                // User management (used by admin page)
                 if (!hasAdminCapability(req)) {
                     sendError(resp, 403, "Insufficient permissions: administrator access required");
                     return;
@@ -623,7 +806,7 @@ public class ApiServlet extends HttpServlet {
                 handleManageUser(req, sb);
                 break;
             case "adminApplicant":
-                // 申请者管理（admin 页面使用）
+                // Applicant management (used by admin page)
                 if (!hasAdminCapability(req)) {
                     sendError(resp, 403, "Insufficient permissions: administrator access required");
                     return;
@@ -636,6 +819,20 @@ public class ApiServlet extends HttpServlet {
                     return;
                 }
                 handleMoApplicant(req, sb);
+                break;
+            case "moProfile":
+                if (!hasRole(req, "MO")) {
+                    sendError(resp, 403, "Insufficient permissions: MO role required");
+                    return;
+                }
+                handleMoProfile(req, sb);
+                break;
+            case "markApplicationViewed":
+                if (!isAuthenticated(req)) {
+                    sendError(resp, 403, "Login required");
+                    return;
+                }
+                handleMarkApplicationViewed(req, sb);
                 break;
             case "moTaMessage":
                 if (!isAuthenticated(req) || (!hasRole(req, "MO") && !hasRole(req, "TA"))) {
@@ -652,7 +849,7 @@ public class ApiServlet extends HttpServlet {
                 handlePostMarkMoTaRead(req, sb);
                 break;
             case "cv":
-                // CV 上传（TA 角色）
+                // CV upload (TA role)
                 if (!hasRole(req, "TA", "ADMIN")) {
                     sendError(resp, 403, "Insufficient permissions: TA or ADMIN role required");
                     return;
@@ -668,7 +865,7 @@ public class ApiServlet extends HttpServlet {
     }
 
     // ============================================================
-    // 业务处理器
+    // Business logic handler
     // ============================================================
 
     private void handleApply(HttpServletRequest req, StringBuilder sb) {
@@ -678,6 +875,18 @@ public class ApiServlet extends HttpServlet {
 
         if (applicantId == null || applicantId.isEmpty() || positionCode == null || positionCode.isEmpty()) {
             sb.append("{\"success\":false,\"message\":\"Missing required fields: applicantId and positionCode\"}");
+            return;
+        }
+
+        // Input length validation
+        if (!isValidLength(applicantId, MAX_STRING_LENGTH) || !isValidLength(positionCode, MAX_CODE_LENGTH)) {
+            sb.append("{\"success\":false,\"message\":\"Invalid input length\"}");
+            return;
+        }
+
+        // Prevent path traversal attacks (forbid ".." in IDs)
+        if (applicantId.contains("..") || positionCode.contains("..")) {
+            sb.append("{\"success\":false,\"message\":\"Invalid characters in parameter\"}");
             return;
         }
 
@@ -693,16 +902,32 @@ public class ApiServlet extends HttpServlet {
             return;
         }
 
+        // Check if this TA already has an application record for this position (any status)
         Application existing = ds.getApplication(applicantId, positionCode);
         if (existing != null) {
-            // 修复4: 被MO拒绝后可重新申请
+            // After MO rejection, re-application allowed: keep old record (stays Rejected), create new application
             if (Application.STATUS_REJECTED.equals(existing.getStatus())) {
-                // 删除旧记录，重新申请
-                ds.getApplications().remove(existing);
+                // Permanently blocked (>=2 rejections): no more applications allowed
+                if (existing.isPermanentlyBlocked()) {
+                    sb.append("{\"success\":false,\"message\":\"You have been permanently blocked from this position after two rejections\"}");
+                    return;
+                }
+                // Only one re-application chance: clear the old record's MO rejection flag
+                // Old record kept (status stays Rejected), used to show history in My Applications
+                existing.setRejectedByMo(false);
+                existing.setMoRejectionCount(0);
+                ds.updateApplication(existing);
             } else {
+                // Non-Rejected status: duplicate application not allowed
                 sb.append("{\"success\":false,\"message\":\"Already applied to this position\"}");
                 return;
             }
+        }
+
+        // Get current application count (determines new application's applyCount)
+        int currentApplyCount = 1;
+        if (existing != null) {
+            currentApplyCount = existing.getApplyCount() + 1;
         }
 
         int score = (int) ta.computeAIScore(pos.getRequiredSkills(), pos.getHoursPerWeek());
@@ -718,6 +943,8 @@ public class ApiServlet extends HttpServlet {
         app.setSkillScore(skillPct);
         app.setGpaScore(gpaPct);
         app.setAvailScore(availPct);
+        // Multiple applications: use applyCount to distinguish multiple application records for the same position
+        app.setApplyCount(currentApplyCount);
 
         String skillsStr = String.join(", ", ta.getSkills());
         String reqSkillsStr = String.join(", ", pos.getRequiredSkills());
@@ -736,6 +963,7 @@ public class ApiServlet extends HttpServlet {
     }
 
     private void handleCreateApplicant(HttpServletRequest req, StringBuilder sb) {
+        String applicantId = req.getParameter("applicantId");
         String name = req.getParameter("name");
         String email = req.getParameter("email");
         String year = req.getParameter("yearOfStudy");
@@ -748,16 +976,38 @@ public class ApiServlet extends HttpServlet {
             return;
         }
 
-        String id = ds.allocateNextApplicantId();
+        // Input length validation
+        if (!isValidLength(name, MAX_NAME_LENGTH)) {
+            sb.append("{\"success\":false,\"message\":\"Name too long (max 128 characters)\"}");
+            return;
+        }
+        if (email != null && !isValidLength(email, MAX_EMAIL_LENGTH)) {
+            sb.append("{\"success\":false,\"message\":\"Email too long (max 128 characters)\"}");
+            return;
+        }
+        if (skillsStr != null && skillsStr.length() > MAX_STRING_LENGTH) {
+            sb.append("{\"success\":false,\"message\":\"Skills too long (max 512 characters)\"}");
+            return;
+        }
+
+        // If applicantId not provided, try to get from the applicant linked to the current logged-in user
+        if (applicantId == null || applicantId.isEmpty()) {
+            String username = sessionUsername(req);
+            if (username != null) {
+                User u = ds.getUserByUsername(username);
+                if (u != null && u.getApplicantId() != null && !u.getApplicantId().isEmpty()) {
+                    applicantId = u.getApplicantId();
+                }
+            }
+        }
+
         double gpa = 0.0;
         try { gpa = Double.parseDouble(gpaStr); } catch (Exception e) {}
-        // GPA 范围校验
         if (gpa < 0.0 || gpa > 4.0) {
             gpa = Math.max(0.0, Math.min(4.0, gpa));
         }
         int hours = 12;
         try { hours = Integer.parseInt(hoursStr); } catch (Exception e) {}
-        // 工作时间范围校验
         if (hours < 0) hours = 0;
         if (hours > 20) hours = 20;
 
@@ -769,8 +1019,28 @@ public class ApiServlet extends HttpServlet {
             }
         }
 
-        TAPplicant ta = new TAPplicant(id, name, email != null ? email : "",
-            year != null ? year : "Year 2", gpa, skills, hours);
+        TAPplicant ta;
+        // If applicantId is provided and exists in the database, update the existing record
+        if (applicantId != null && !applicantId.isEmpty()) {
+            ta = ds.getApplicantById(applicantId);
+            if (ta != null) {
+                // Update existing record
+                ta.setName(name);
+                ta.setEmail(email != null ? email : "");
+                ta.setYearOfStudy(year != null ? year : "Year 2");
+                ta.setGpa(gpa);
+                ta.setSkills(skills);
+                ta.setHoursAvailable(hours);
+            } else {
+                // applicantId exists but record not found, reject the operation (prevents wrong ID)
+                sb.append("{\"success\":false,\"message\":\"Applicant ID not found: " + esc(applicantId) + "\"}");
+                return;
+            }
+        } else {
+            // No applicantId (and current user has no linked applicant), reject creating new record
+            sb.append("{\"success\":false,\"message\":\"No applicant ID linked to your account. Please contact administrator.\"}");
+            return;
+        }
         ds.saveApplicant(ta);
 
         sb.append("{\"success\":true,\"message\":\"Profile saved\",")
@@ -792,10 +1062,22 @@ public class ApiServlet extends HttpServlet {
             return;
         }
 
+        // Input length validation
+        if (!isValidLength(code, MAX_CODE_LENGTH) || !isValidLength(name, MAX_NAME_LENGTH)) {
+            sb.append("{\"success\":false,\"message\":\"Invalid input length\"}");
+            return;
+        }
+
+        // Prevent path traversal and special characters
+        if (code.contains("..") || name.contains("..")) {
+            sb.append("{\"success\":false,\"message\":\"Invalid characters in parameter\"}");
+            return;
+        }
+
         Position existingPos = ds.getPositionByCode(code);
         boolean isUpdate = existingPos != null;
 
-        // 权限检查：如果是更新，MO只能更新自己发布的课程
+        // Permission check: for updates, MO can only update courses they published
         if (isUpdate) {
             if (!hasAdminCapability(req) && hasRole(req, "MO")) {
                 String moUser = sessionUsername(req);
@@ -805,7 +1087,7 @@ public class ApiServlet extends HttpServlet {
                 }
             }
         } else {
-            // 新建时检查代码唯一性
+            // Check code uniqueness when creating new
             if (ds.positionCodeExists(code)) {
                 sb.append("{\"success\":false,\"message\":\"Position code already exists: " + esc(code) + "\"}");
                 return;
@@ -842,15 +1124,17 @@ public class ApiServlet extends HttpServlet {
             pos.setTotalSlots(slots);
             pos.setDeadline(deadline != null ? deadline : pos.getDeadline());
             pos.setDescription(desc);
-            // 不改变 postedByUsername，保持原有MO归属
+            // Do not change postedByUsername, preserve original MO ownership
             ds.savePositions();
         } else {
             pos = new Position(code, name, skills, hours, slots,
                 deadline != null ? deadline : "2026-04-30",
                 postedBy != null ? postedBy : "Admin");
+            pos.setOpen(true);
             pos.setDescription(desc);
 
-            if (session != null && hasRole(req, "MO") && !hasAdminCapability(req)) {
+            if (session != null && hasRole(req, "MO")) {
+                // Even for ADMIN+MO hybrid accounts, set postedByUsername to ensure correct MO ownership
                 User moUserObj = ds.getUserByUsername(moUser);
                 if (moUserObj != null) {
                     pos.setPostedByUsername(moUser);
@@ -882,7 +1166,7 @@ public class ApiServlet extends HttpServlet {
             return;
         }
 
-        // 权限检查：MO只能删除自己发布的课程
+        // Permission check: MO can only delete courses they published
         if (!hasAdminCapability(req) && hasRole(req, "MO")) {
             String moUser = sessionUsername(req);
             if (pos.getPostedByUsername() == null || !pos.getPostedByUsername().equalsIgnoreCase(moUser)) {
@@ -891,7 +1175,7 @@ public class ApiServlet extends HttpServlet {
             }
         }
 
-        // 删除该课程的所有申请
+        // Delete all applications for this course
         List<Application> toRemove = new ArrayList<>();
         for (Application a : ds.getApplications()) {
             if (a != null && code.equalsIgnoreCase(a.getPositionCode())) {
@@ -903,12 +1187,47 @@ public class ApiServlet extends HttpServlet {
         }
         if (!toRemove.isEmpty()) ds.saveApplications();
 
-        // 删除课程
+        // Delete course
         ds.getPositions().remove(pos);
         ds.savePositions();
         ds.addLog(SystemLog.OP_WRITE, "positions.json", SystemLog.STATUS_OK);
 
         sb.append("{\"success\":true,\"message\":\"Module deleted: " + esc(code) + "\"}");
+    }
+
+    private void handleMoProfile(HttpServletRequest req, StringBuilder sb) {
+        String moUser = sessionUsername(req);
+        if (moUser == null) {
+            sb.append("{\"success\":false,\"message\":\"Not authenticated\"}");
+            return;
+        }
+        User user = ds.getUserByUsername(moUser);
+        if (user == null) {
+            sb.append("{\"success\":false,\"message\":\"User not found\"}");
+            return;
+        }
+
+        String displayName = req.getParameter("displayName");
+        String email = req.getParameter("email");
+
+        // Input length validation
+        if (displayName != null && !isValidLength(displayName, MAX_NAME_LENGTH)) {
+            sb.append("{\"success\":false,\"message\":\"Display name too long (max 128 characters)\"}");
+            return;
+        }
+        if (email != null && !isValidLength(email, MAX_EMAIL_LENGTH)) {
+            sb.append("{\"success\":false,\"message\":\"Email too long (max 128 characters)\"}");
+            return;
+        }
+
+        if (displayName != null) user.setDisplayName(displayName.trim());
+        if (email != null) user.setEmail(email.trim());
+        ds.saveUsers();
+        ds.addLog(SystemLog.OP_WRITE, "users.json", SystemLog.STATUS_OK);
+
+        sb.append("{\"success\":true,\"message\":\"Profile updated\",\"username\":\"").append(esc(user.getUsername())).append("\",");
+        sb.append("\"displayName\":\"").append(esc(user.getDisplayName() != null ? user.getDisplayName() : "")).append("\",");
+        sb.append("\"email\":\"").append(esc(user.getEmail() != null ? user.getEmail() : "")).append("\"}");
     }
 
     private void handleUpdateStatus(HttpServletRequest req, StringBuilder sb) {
@@ -920,13 +1239,13 @@ public class ApiServlet extends HttpServlet {
             return;
         }
 
-        // P0-3: 状态值白名单校验
+        // P0-3: Status value whitelist validation
         if (!VALID_STATUSES.contains(status)) {
             sb.append("{\"success\":false,\"message\":\"Invalid status value. Must be one of: Submitted, Under Review, Accepted, Rejected\"}");
             return;
         }
 
-        // 使用高效的 getApplicationById（新增）
+        // Use efficient getApplicationById (newly added)
         Application target = ds.getApplicationById(appId);
         if (target == null) {
             sb.append("{\"success\":false,\"message\":\"Application not found\"}");
@@ -940,7 +1259,7 @@ public class ApiServlet extends HttpServlet {
 
         String oldStatus = target.getStatus();
 
-        // P0-3: 状态机流转合法性校验
+        // P0-3: State machine transition validation
         if (!oldStatus.equals(status)) {
             Set<String> allowed = ALLOWED_TRANSITIONS.get(oldStatus);
             if (allowed == null || !allowed.contains(status)) {
@@ -950,27 +1269,66 @@ public class ApiServlet extends HttpServlet {
             }
         }
 
-        // P0-3: 拒绝时减少 filledSlots
+        // P0-3: Decide whether to update filledSlots and workload based on state transition
+        // Critical: all data updates must happen before setStatus!
+        // Only Accepted -> Rejected (retract) reduces filledSlots and workload
         if (Application.STATUS_ACCEPTED.equals(oldStatus)
                 && Application.STATUS_REJECTED.equals(status)) {
+            // Retract: decrement filledSlots, decrement workload
             Position pos = ds.getPositionByCode(target.getPositionCode());
-            if (pos != null && pos.getFilledSlots() > 0) {
-                pos.setFilledSlots(pos.getFilledSlots() - 1);
+            if (pos != null) {
+                // Bug 1/2 fix: try decrement even if filledSlots is 0 (prevents double retract)
+                if (pos.getFilledSlots() > 0) {
+                    pos.setFilledSlots(pos.getFilledSlots() - 1);
+                }
                 ds.savePositions();
+                // Bug 2 fix: ensure workload is correctly decremented, works even with no existing record
+                int current = ds.getWorkloadHours(target.getApplicantId());
+                int reduceHours = pos.getHoursPerWeek();
+                int newWorkload = Math.max(0, current - reduceHours);
+                ds.setWorkloadHours(target.getApplicantId(), newWorkload);
+                System.out.println("[handleUpdateStatus] Retract: applicantId=" + target.getApplicantId()
+                    + ", reduceHours=" + reduceHours + ", oldWorkload=" + current + ", newWorkload=" + newWorkload
+                    + ", filledSlots=" + pos.getFilledSlots());
             }
+            // Retract also sets rejectedByMo so TA can reapply
+            target.setRejectedByMo(true);
+        }
+
+        // On MO rejection, set rejectedByMo flag and increment rejection count (only when transitioning from Submitted/Review to Rejected)
+        if (Application.STATUS_REJECTED.equals(status)
+                && (Application.STATUS_SUBMITTED.equals(oldStatus) || Application.STATUS_REVIEW.equals(oldStatus))) {
+            target.setRejectedByMo(true);
+            // New: record rejection count, permanently block at 2
+            int newCount = target.getMoRejectionCount() + 1;
+            target.setMoRejectionCount(newCount);
+            System.out.println("[handleUpdateStatus] Reject: applicantId=" + target.getApplicantId()
+                + ", position=" + target.getPositionCode()
+                + ", moRejectionCount=" + newCount
+                + ", permanentlyBlocked=" + target.isPermanentlyBlocked());
+        }
+
+        // On acceptance, increment filledSlots and add to workload, clear rejectedByMo flag
+        if (Application.STATUS_ACCEPTED.equals(status)) {
+            Position pos = ds.getPositionByCode(target.getPositionCode());
+            if (pos != null) {
+                // Bug 1 fix: increment filledSlots and save
+                pos.setFilledSlots(pos.getFilledSlots() + 1);
+                ds.savePositions();
+                // Bug 1 fix: ensure workload is correctly incremented, works even with no existing record
+                int current = ds.getWorkloadHours(target.getApplicantId());
+                int addHours = pos.getHoursPerWeek();
+                int newWorkload = current + addHours;
+                ds.setWorkloadHours(target.getApplicantId(), newWorkload);
+                System.out.println("[handleUpdateStatus] Accept: applicantId=" + target.getApplicantId()
+                    + ", addHours=" + addHours + ", oldWorkload=" + current + ", newWorkload=" + newWorkload
+                    + ", filledSlots=" + pos.getFilledSlots());
+            }
+            target.setRejectedByMo(false);
         }
 
         target.setStatus(status);
         ds.updateApplication(target);
-
-        // 接受时增加 filledSlots
-        if (Application.STATUS_ACCEPTED.equals(status)) {
-            Position pos = ds.getPositionByCode(target.getPositionCode());
-            if (pos != null) {
-                pos.setFilledSlots(pos.getFilledSlots() + 1);
-                ds.savePositions();
-            }
-        }
 
         ds.addLog(SystemLog.OP_WRITE, "applications.json", SystemLog.STATUS_OK);
 
@@ -995,7 +1353,7 @@ public class ApiServlet extends HttpServlet {
             return;
         }
 
-        // P0-6: 工作量范围校验（防止负数、超大值）
+        // P0-6: Workload range validation (prevent negative or oversized values)
         if (hours < MIN_HOURS || hours > MAX_HOURS) {
             sb.append("{\"success\":false,\"message\":\"Hours must be between " + MIN_HOURS + " and " + MAX_HOURS + "\"}");
             return;
@@ -1026,7 +1384,7 @@ public class ApiServlet extends HttpServlet {
             return;
         }
 
-        // 权限检查：MO只能修改自己负责的课程的配额
+        // Permission check: MO can only modify quota for courses they manage
         if (!hasAdminCapability(req) && hasRole(req, "MO")) {
             String moUser = sessionUsername(req);
             if (pos.getPostedByUsername() == null || !pos.getPostedByUsername().equalsIgnoreCase(moUser)) {
@@ -1043,14 +1401,14 @@ public class ApiServlet extends HttpServlet {
             return;
         }
 
-        // 配额不能少于已接受的席位数
+        // Quota cannot be less than the number of accepted slots
         if (totalSlots < pos.getFilledSlots()) {
             sb.append("{\"success\":false,\"message\":\"Total slots cannot be less than filled slots (" + pos.getFilledSlots() + ")\"}");
             return;
         }
-        // 配额上限
+        // Quota upper limit
         if (totalSlots > 10) {
-            // P0-6: 超出范围返回错误而非静默截断
+            // P0-6: Return error for out-of-range instead of silently truncating
             sb.append("{\"success\":false,\"message\":\"Total slots cannot exceed 10\"}");
             return;
         }
@@ -1065,6 +1423,8 @@ public class ApiServlet extends HttpServlet {
     private void handleRebalanceWorkload(StringBuilder sb) {
         Map<String, Integer> workloads = ds.getWorkloadHours();
         List<User> allUsers = ds.getUsers();
+
+        // Build WorkloadEntry with accepted positions for AI analysis
         List<LLMService.WorkloadEntry> entries = new ArrayList<>();
         for (User u : allUsers) {
             if (!u.hasRole("TA")) continue;
@@ -1073,10 +1433,20 @@ public class ApiServlet extends HttpServlet {
             TAPplicant ta = ds.getApplicantById(appId);
             if (ta == null) continue;
             int hours = workloads.containsKey(appId) ? workloads.get(appId) : 0;
-            entries.add(new LLMService.WorkloadEntry(appId, ta.getName(), u.getUsername(), hours));
+
+            // Gather accepted positions for this TA
+            Map<String, Integer> posMap = new java.util.HashMap<>();
+            for (Application a : ds.getApplications()) {
+                if (a == null || !Application.STATUS_ACCEPTED.equals(a.getStatus())) continue;
+                if (!appId.equalsIgnoreCase(a.getApplicantId())) continue;
+                Position p = ds.getPositionByCode(a.getPositionCode());
+                if (p != null) {
+                    posMap.put(a.getPositionCode(), p.getHoursPerWeek());
+                }
+            }
+            entries.add(new LLMService.WorkloadEntry(appId, ta.getName(), u.getUsername(), hours, posMap));
         }
 
-        // P1: 尝试调用 DeepSeek AI 再平衡建议
         int capacity = 20;
         SystemConfig.WorkloadConfig wc = ds.getSystemConfig().getWorkloadConfig();
         if (wc != null) capacity = wc.getOverloadThreshold();
@@ -1084,50 +1454,118 @@ public class ApiServlet extends HttpServlet {
         LLMService.RebalanceAdvice advice = llmService.generateWorkloadRebalanceAdvice(entries, capacity);
 
         if (advice != null && "reduce".equals(advice.action)
-                && advice.targetApplicantId != null && advice.targetHours != null) {
-            // DeepSeek 返回了有效建议
-            ds.setWorkloadHours(advice.targetApplicantId, advice.targetHours);
-            ds.addLog(SystemLog.OP_WRITE, "workloads.json", SystemLog.STATUS_OK);
+                && advice.targetApplicantId != null && advice.targetPositionCode != null) {
+            // Store the suggestion for the TA to confirm — do NOT auto-apply
+            ds.saveWorkloadSuggestion(advice);
             sb.append("{\"success\":true,\"ai\":true,\"message\":\"")
               .append(esc(advice.summary))
               .append("\",\"reasoning\":\"")
               .append(esc(advice.reasoning))
               .append("\",\"targetApplicantId\":\"")
               .append(esc(advice.targetApplicantId))
-              .append("\",\"targetHours\":")
-              .append(advice.targetHours)
-              .append(",\"targetDisplayName\":\"")
+              .append("\",\"targetDisplayName\":\"")
               .append(esc(advice.targetDisplayName != null ? advice.targetDisplayName : ""))
-              .append("\"}");
+              .append("\",\"targetPositionCode\":\"")
+              .append(esc(advice.targetPositionCode))
+              .append("\",\"targetPositionName\":\"")
+              .append(esc(advice.targetPositionName != null ? advice.targetPositionName : ""))
+              .append("\",\"targetHoursDelta\":")
+              .append(advice.targetHoursDelta != null ? advice.targetHoursDelta : "null")
+              .append("}");
             return;
         }
 
-        // P0: DeepSeek unavailable — fallback to fixed rule (reduce by 4h if > capacity)
-        int adjusted = 0;
-        for (User u : allUsers) {
-            if (!u.hasRole("TA")) continue;
-            String appId = u.getApplicantId();
-            if (appId == null || appId.isEmpty()) continue;
-            TAPplicant ta = ds.getApplicantById(appId);
-            if (ta == null) continue;
-            int hours = workloads.containsKey(appId) ? workloads.get(appId) : 0;
-            if (hours > capacity) {
-                int newHours = Math.max(0, hours - 4);
-                ds.setWorkloadHours(appId, newHours);
-                adjusted++;
-            }
+        // No overloaded TAs or AI unavailable — nothing to suggest
+        sb.append("{\"success\":true,\"ai\":false,\"message\":\"")
+          .append(advice != null && "no_action".equals(advice.action)
+                  ? "No overloaded TAs. Workloads are within safe range."
+                  : "AI service unavailable and no overloaded TAs found.")
+          .append("\"}");
+    }
+
+    /**
+     * TA fetches their pending AI workload adjustment suggestion.
+     * Reads the current pending suggestion from DataStore, returns it if it belongs to the current TA.
+     */
+    private void handleGetWorkloadSuggestion(HttpServletRequest req, StringBuilder sb) {
+        User me = ds.getUserByUsername(sessionUsername(req));
+        if (me == null || me.getApplicantId() == null || me.getApplicantId().isEmpty()) {
+            sb.append("{\"hasSuggestion\":false,\"message\":\"No applicant profile linked.\"}");
+            return;
+        }
+        String aid = me.getApplicantId();
+        LLMService.RebalanceAdvice sugg = ds.getPendingWorkloadSuggestion();
+        if (sugg == null || !aid.equalsIgnoreCase(sugg.targetApplicantId)) {
+            sb.append("{\"hasSuggestion\":false,\"message\":\"No pending suggestion for you.\"}");
+            return;
+        }
+        sb.append("{\"hasSuggestion\":true,\"suggestion\":{");
+        sb.append("\"targetApplicantId\":\"").append(esc(sugg.targetApplicantId)).append("\",");
+        sb.append("\"targetDisplayName\":\"").append(esc(sugg.targetDisplayName != null ? sugg.targetDisplayName : "")).append("\",");
+        sb.append("\"targetPositionCode\":\"").append(esc(sugg.targetPositionCode != null ? sugg.targetPositionCode : "")).append("\",");
+        sb.append("\"targetPositionName\":\"").append(esc(sugg.targetPositionName != null ? sugg.targetPositionName : "")).append("\",");
+        sb.append("\"targetHoursDelta\":").append(sugg.targetHoursDelta != null ? sugg.targetHoursDelta : "null").append(",");
+        sb.append("\"reasoning\":\"").append(esc(sugg.reasoning != null ? sugg.reasoning : "")).append("\",");
+        sb.append("\"summary\":\"").append(esc(sugg.summary != null ? sugg.summary : "")).append("\"");
+        sb.append("}}");
+    }
+
+    /**
+     * TA confirms or dismisses the AI suggestion.
+     * confirm=true: changes the specified application's status to Rejected and updates workload.
+     * confirm=false: clears the pending suggestion only.
+     */
+    private void handleWorkloadSuggestionResponse(HttpServletRequest req, StringBuilder sb) {
+        User me = ds.getUserByUsername(sessionUsername(req));
+        if (me == null || me.getApplicantId() == null || me.getApplicantId().isEmpty()) {
+            sb.append("{\"success\":false,\"message\":\"No applicant profile linked.\"}");
+            return;
+        }
+        String aid = me.getApplicantId();
+        String actionParam = req.getParameter("action"); // "confirm" or "dismiss"
+        boolean confirm = "confirm".equalsIgnoreCase(actionParam);
+
+        LLMService.RebalanceAdvice sugg = ds.getPendingWorkloadSuggestion();
+        if (sugg == null || !aid.equalsIgnoreCase(sugg.targetApplicantId)) {
+            sb.append("{\"success\":false,\"message\":\"No pending suggestion to respond to.\"}");
+            return;
         }
 
-        if (adjusted > 0) {
-            sb.append("{\"success\":true,\"ai\":false,\"message\":\"Workload rebalanced for ")
-              .append(adjusted).append(" overloaded TA(s). All TAs now within safe range.\"}");
+        if (confirm) {
+            // Find the accepted application for this position and withdraw it
+            String posCode = sugg.targetPositionCode;
+            Application toWithdraw = null;
+            for (Application a : ds.getApplications()) {
+                if (a == null || !Application.STATUS_ACCEPTED.equals(a.getStatus())) continue;
+                if (!aid.equalsIgnoreCase(a.getApplicantId())) continue;
+                if (posCode != null && posCode.equalsIgnoreCase(a.getPositionCode())) {
+                    toWithdraw = a;
+                    break;
+                }
+            }
+            if (toWithdraw != null) {
+                toWithdraw.setStatus(Application.STATUS_REJECTED);
+                ds.updateApplication(toWithdraw);
+
+                // Recalculate workload: subtract the position's hours
+                Position p = ds.getPositionByCode(posCode);
+                int deduct = p != null ? p.getHoursPerWeek() : 0;
+                int currentHours = ds.getWorkloadHours(aid);
+                int newHours = Math.max(0, currentHours - deduct);
+                ds.setWorkloadHours(aid, newHours);
+            }
+
+            ds.clearWorkloadSuggestion();
+            sb.append("{\"success\":true,\"message\":\"Position ").append(esc(posCode)).append(" has been removed. Workload updated.\"}");
         } else {
-            sb.append("{\"success\":true,\"ai\":false,\"message\":\"No overloaded TAs. Workloads are within safe range.\"}");
+            // Dismiss: just clear the suggestion
+            ds.clearWorkloadSuggestion();
+            sb.append("{\"success\":true,\"message\":\"Suggestion dismissed.\"}");
         }
     }
 
     // ============================================================
-    // MO 手下 TA、MO↔TA 留言
+    // MO's TAs, MO↔TA Messages
     // ============================================================
 
     private void handleGetMyTas(HttpServletRequest req, StringBuilder sb) {
@@ -1169,8 +1607,8 @@ public class ApiServlet extends HttpServlet {
     }
 
     /**
-     * MO 获取自己发布的职位下所有待审核的 TA 申请者（Submitted / Under Review）。
-     * 按 AI 分数降序排列，每个 applicantId 只出现一次。
+     * MO gets all pending TA applicants (Submitted / Under Review) for positions they published.
+     * Sorted by AI score descending, each applicantId appears only once.
      */
     private void handleGetPendingApplicants(HttpServletRequest req, StringBuilder sb) {
         String moUser = sessionUsername(req);
@@ -1212,8 +1650,8 @@ public class ApiServlet extends HttpServlet {
     }
 
     /**
-     * TA 获取自己已接受（Accepted）的岗位列表（用于 My Positions）。
-     * 返回岗位详情 + 对应 MO 的用户名/显示名。
+     * TA gets their list of accepted positions (used for My Positions).
+     * Returns position details + MO username/display name.
      */
     private void handleGetMyPositions(HttpServletRequest req, StringBuilder sb) {
         User me = ds.getUserByUsername(sessionUsername(req));
@@ -1249,6 +1687,49 @@ public class ApiServlet extends HttpServlet {
         sb.append("]}");
     }
 
+    /**
+     * When TA views a rejected application detail, clears the rejectedByMo flag.
+     * If rejected >= 2 times, permanently block (no more re-applications).
+     */
+    private void handleMarkApplicationViewed(HttpServletRequest req, StringBuilder sb) {
+        String appId = req.getParameter("applicationId");
+        if (appId == null || appId.isEmpty()) {
+            sb.append("{\"success\":false,\"message\":\"Missing applicationId\"}");
+            return;
+        }
+        Application app = ds.getApplicationById(appId);
+        if (app == null) {
+            sb.append("{\"success\":false,\"message\":\"Application not found\"}");
+            return;
+        }
+        // Security check: can only clear own application
+        User me = ds.getUserByUsername(sessionUsername(req));
+        if (me == null || me.getApplicantId() == null
+                || !me.getApplicantId().equalsIgnoreCase(app.getApplicantId())) {
+            sb.append("{\"success\":false,\"message\":\"Unauthorized\"}");
+            return;
+        }
+        // Bug 3 fix: when TA views a rejected application detail, clear the rejectedByMo flag
+        // But if rejected >= 2 times, permanently block, no more re-applications
+        boolean wasRejectedByMo = Application.STATUS_REJECTED.equals(app.getStatus()) && app.isRejectedByMo();
+        boolean permanentlyBlocked = app.isPermanentlyBlocked();
+
+        if (wasRejectedByMo) {
+            if (permanentlyBlocked) {
+                // Rejected >= 2 times, permanently blocked: clear flag but don't set to false, keep blocked state
+                System.out.println("[handleMarkApplicationViewed] Permanently blocked: appId=" + appId
+                    + ", moRejectionCount=" + app.getMoRejectionCount());
+            } else {
+                // First-time rejection: clear flag so position becomes Available again
+                app.setRejectedByMo(false);
+                ds.updateApplication(app);
+                System.out.println("[handleMarkApplicationViewed] Cleared rejectedByMo for appId=" + appId
+                    + " (applicantId=" + app.getApplicantId() + ", position=" + app.getPositionCode() + ")");
+            }
+        }
+        sb.append("{\"success\":true,\"message\":\"Application marked as viewed\",\"positionAvailable\":").append(wasRejectedByMo && !permanentlyBlocked).append(",\"permanentlyBlocked\":").append(permanentlyBlocked).append("}");
+    }
+
     private void handleGetMoTaMessages(HttpServletRequest req, StringBuilder sb) {
         String applicantId = req.getParameter("applicantId");
         String moUser = sessionUsername(req);
@@ -1256,8 +1737,8 @@ public class ApiServlet extends HttpServlet {
             sb.append("{\"success\":false,\"message\":\"Missing applicantId\"}");
             return;
         }
-        // 新逻辑：MO 查看消息不再检查 isTaOfMo（仅 Accepted），改为检查：
-        // 该 applicantId 在 MO 发布的任意职位下有申请记录（Submitted/Under Review/Accepted 均可）
+        // New logic: MO view messages no longer checks isTaOfMo (only Accepted), now checks:
+        // this applicantId has any application record for any position published by the MO (Submitted/Under Review/Accepted all qualify)
         if (!moHasApplicationWith(applicantId.trim(), moUser)) {
             sb.append("{\"success\":false,\"message\":\"No application from this applicant under your positions\"}");
             return;
@@ -1282,29 +1763,37 @@ public class ApiServlet extends HttpServlet {
             return;
         }
         String aid = me.getApplicantId();
-        LinkedHashMap<String, String> moUserToName = new LinkedHashMap<>();
-        // 收集该 TA 所有已 Accepted 的申请对应的 MO
+        LinkedHashMap<String, String[]> moUserToInfo = new LinkedHashMap<>();
+        // Collect all MOs for this TA's applications (including Accepted and Pending)
         for (Application a : ds.getApplications()) {
             if (a == null) continue;
-            if (!Application.STATUS_ACCEPTED.equals(a.getStatus())) continue;
+            String appStatus = a.getStatus();
+            if (appStatus == null) continue;
+            boolean isAccepted = Application.STATUS_ACCEPTED.equals(appStatus);
+            boolean isPending = Application.STATUS_SUBMITTED.equals(appStatus) || Application.STATUS_REVIEW.equals(appStatus);
+            if (!isAccepted && !isPending) continue;
             if (!aid.equalsIgnoreCase(a.getApplicantId())) continue;
             Position p = ds.getPositionByCode(a.getPositionCode());
             String mu = resolveMoUsernameForPosition(p);
             if (mu == null) continue;
-            if (moUserToName.containsKey(mu)) continue;
+            if (moUserToInfo.containsKey(mu)) continue;
             User m = ds.getUserByUsername(mu);
-            moUserToName.put(mu, m != null && m.getDisplayName() != null ? m.getDisplayName() : mu);
+            String displayName = m != null && m.getDisplayName() != null ? m.getDisplayName() : mu;
+            moUserToInfo.put(mu, new String[]{displayName, isAccepted ? "accepted" : "pending"});
         }
         String myU = me.getUsername();
         sb.append("{\"success\":true,\"threads\":[");
         int i = 0;
-        for (Map.Entry<String, String> e : moUserToName.entrySet()) {
+        for (Map.Entry<String, String[]> e : moUserToInfo.entrySet()) {
             if (i++ > 0) sb.append(",");
             int unread = countUnreadMoTaThread(e.getKey(), aid, myU);
+            String displayName = e.getValue()[0];
+            String status = e.getValue()[1];
             sb.append("{");
             sb.append("\"moUsername\":\"").append(esc(e.getKey())).append("\",");
-            sb.append("\"moDisplayName\":\"").append(esc(e.getValue())).append("\",");
-            sb.append("\"unread\":").append(unread);
+            sb.append("\"moDisplayName\":\"").append(esc(displayName)).append("\",");
+            sb.append("\"unread\":").append(unread).append(",");
+            sb.append("\"status\":\"").append(esc(status)).append("\"");
             sb.append("}");
         }
         sb.append("]}");
@@ -1322,7 +1811,7 @@ public class ApiServlet extends HttpServlet {
             return;
         }
         final String moUserKey = moUsername.trim();
-        // 新逻辑：不再仅限 Accepted，改为该 MO 发布任意职位下该 TA 有申请记录即可
+        // New logic: no longer limited to Accepted, now any application record for any position the MO published is sufficient
         if (!moHasApplicationWith(me.getApplicantId(), moUserKey)) {
             sb.append("{\"success\":false,\"message\":\"Invalid thread\"}");
             return;
@@ -1374,7 +1863,7 @@ public class ApiServlet extends HttpServlet {
                 return;
             }
             applicantId = applicantId.trim();
-            // 新逻辑：不再要求 isTaOfMo（仅 Accepted），改为 moHasApplicationWith（任意申请状态均可）
+            // New logic: no longer requires isTaOfMo (only Accepted), now uses moHasApplicationWith (any application status qualifies)
             if (!moHasApplicationWith(applicantId, myUser)) {
                 sb.append("{\"success\":false,\"message\":\"No application from this applicant under your positions\"}");
                 return;
@@ -1482,7 +1971,7 @@ public class ApiServlet extends HttpServlet {
     }
 
     // ============================================================
-    // Admin 用户管理
+    // Admin user management
     // ============================================================
 
     private void handleManageUser(HttpServletRequest req, StringBuilder sb) {
@@ -1605,7 +2094,7 @@ public class ApiServlet extends HttpServlet {
             sb.append("{\"success\":false,\"message\":\"User not found\"}");
             return;
         }
-        // 防止删除最后一个 ADMIN
+        // Prevent deleting the last ADMIN
         if (user.hasRole("ADMIN")) {
             long adminCount = ds.getUsers().stream()
                 .filter(u -> u != null && u.hasRole("ADMIN"))
@@ -1623,7 +2112,7 @@ public class ApiServlet extends HttpServlet {
     }
 
     // ============================================================
-    // Admin 申请者管理
+    // Admin applicant management
     // ============================================================
 
     private void handleAdminApplicant(HttpServletRequest req, StringBuilder sb) {
@@ -1700,14 +2189,14 @@ public class ApiServlet extends HttpServlet {
             sb.append("{\"success\":false,\"message\":\"Applicant ID is required\"}");
             return;
         }
-        // 检查是否有用户关联此申请者 ID
+        // Check if any user is linked to this applicant ID
         boolean hasLinkedUser = ds.getUsers().stream()
             .anyMatch(u -> u != null && applicantId.equals(u.getApplicantId()));
         if (hasLinkedUser) {
             sb.append("{\"success\":false,\"message\":\"Cannot delete: a user account is linked to this applicant ID\"}");
             return;
         }
-        // 删除该申请者的所有申请记录
+        // Delete all application records for this applicant
         List<Application> toRemove = new ArrayList<>();
         for (Application a : ds.getApplications()) {
             if (a != null && applicantId.equals(a.getApplicantId())) {
@@ -1719,7 +2208,7 @@ public class ApiServlet extends HttpServlet {
         }
         if (!toRemove.isEmpty()) ds.saveApplications();
 
-        // 删除申请者记录
+        // Delete applicant record
         TAPplicant toDelete = ds.getApplicantById(applicantId);
         if (toDelete != null) {
             ds.getApplicants().remove(toDelete);
@@ -1730,19 +2219,19 @@ public class ApiServlet extends HttpServlet {
     }
 
     // ============================================================
-    // CV 上传处理
+    // CV upload handler
     // ============================================================
 
     private void handleCVUpload(HttpServletRequest req, StringBuilder sb) {
-        // 获取 Content-Type 判断是否有文件上传
+        // Get Content-Type to determine if there is a file upload
         String contentType = req.getContentType();
         if (contentType == null || !contentType.toLowerCase().contains("multipart/form-data")) {
             sb.append("{\"success\":false,\"message\":\"No file uploaded or incorrect Content-Type\"}");
             return;
         }
 
-        // 注意：需要 @MultipartConfig 注解支持。
-        // 如果 servlet 容器不支持 multipart，请改用独立的 UploadServlet。
+        // Note: requires @MultipartConfig annotation support.
+        // If servlet container does not support multipart, use a separate UploadServlet instead.
         String applicantId = req.getParameter("applicantId");
         if (applicantId == null || applicantId.isEmpty()) {
             sb.append("{\"success\":false,\"message\":\"Applicant ID is required for CV upload\"}");
@@ -1755,13 +2244,13 @@ public class ApiServlet extends HttpServlet {
             return;
         }
 
-        // 简单实现：返回成功响应（实际文件上传需要配置 @MultipartConfig）
-        // 文件保存逻辑将在独立 UploadServlet 中实现
+        // Simple implementation: return success response (actual file upload requires @MultipartConfig)
+        // File save logic will be implemented in a separate UploadServlet
         sb.append("{\"success\":true,\"message\":\"CV upload endpoint reached. Please configure @MultipartConfig for full file upload support.\"}");
     }
 
     // ============================================================
-    // JSON 序列化
+    // JSON serialization
     // ============================================================
 
     private String positionToJson(Position p) {
@@ -1770,7 +2259,7 @@ public class ApiServlet extends HttpServlet {
         sb.append("{");
         sb.append("\"code\":\"").append(esc(p.getCode())).append("\",");
         sb.append("\"name\":\"").append(esc(p.getName())).append("\",");
-        sb.append("\"requiredSkills\":\"").append(esc(p.getRequiredSkillsStr())).append("\",");
+        sb.append("\"requiredSkills\":\"").append(esc(p.getRequiredSkillsStrComputed())).append("\",");
         sb.append("\"skillsList\":[");
         List<String> sk = p.getRequiredSkills();
         if (sk != null) {
@@ -1789,7 +2278,7 @@ public class ApiServlet extends HttpServlet {
         sb.append("\"postedBy\":\"").append(esc(p.getPostedBy())).append("\",");
         sb.append("\"postedByUsername\":").append(p.getPostedByUsername() != null
             ? "\"" + esc(p.getPostedByUsername()) + "\"" : "null").append(",");
-        sb.append("\"isOpen\":").append(p.isOpen());
+        sb.append("\"open\":").append(p.isOpen());
         sb.append("}");
         return sb.toString();
     }
@@ -1830,6 +2319,9 @@ public class ApiServlet extends HttpServlet {
         sb.append("\"positionName\":\"").append(esc(a.getPositionName())).append("\",");
         sb.append("\"appliedAt\":\"").append(esc(a.getAppliedAt())).append("\",");
         sb.append("\"status\":\"").append(esc(a.getStatus())).append("\",");
+        sb.append("\"rejectedByMo\":").append(a.isRejectedByMo()).append(",");
+        sb.append("\"moRejectionCount\":").append(a.getMoRejectionCount()).append(",");
+        sb.append("\"applyCount\":").append(a.getApplyCount()).append(",");
         sb.append("\"aiScore\":").append(a.getAiScore()).append(",");
         sb.append("\"aiExplanation\":\"").append(esc(a.getAiExplanation())).append("\",");
         sb.append("\"llmExplanation\":").append(a.getLlmExplanation() != null ? "\"" + esc(a.getLlmExplanation()) + "\"" : "null");
@@ -1894,7 +2386,7 @@ public class ApiServlet extends HttpServlet {
                 SystemConfig.DemoAccount a = cfg.getDemoAccounts().get(i);
                 if (i > 0) sb.append(",");
                 sb.append("{");
-                // P0-9: 不返回明文密码，只返回角色和用户名
+                // P0-9: Do not return plaintext passwords, only return roles and username
                 sb.append("\"username\":\"").append(esc(a.getUsername())).append("\",");
                 sb.append("\"role\":\"").append(esc(a.getRole())).append("\",");
                 sb.append("\"displayName\":\"").append(esc(a.getDisplayName())).append("\"}");

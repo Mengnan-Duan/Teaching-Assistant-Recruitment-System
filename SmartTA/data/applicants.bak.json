@@ -1,0 +1,11 @@
+[ {
+  "id" : "A001",
+  "name" : "Zhang San",
+  "email" : "yangfanchou96@gmail.com",
+  "yearOfStudy" : "",
+  "gpa" : 0.0,
+  "skills" : [ "Java", "Python" ],
+  "hoursAvailable" : 0,
+  "cvFileName" : null,
+  "createdAt" : "2026-04-11"
+} ]

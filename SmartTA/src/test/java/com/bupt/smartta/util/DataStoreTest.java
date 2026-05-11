@@ -13,29 +13,29 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * DataStore 工具类的单元测试。
+ * Unit tests for the DataStore utility class.
  *
- * <p>测试策略：
+ * <p>Testing strategy:
  * <ul>
- *   <li>通过反射重置单例 instance + initialized 标志，使每次测试独立初始化</li>
- *   <li>使用 JUnit TemporaryFolder 创建隔离的临时测试数据目录</li>
- *   <li>测试覆盖：单例模式、ID 分配（allocateNextApplicantId）、
- *       申请索引重建、email 同步、MO↔TA 消息、user 查询等</li>
+ *   <li>Reset singleton instance + initialized flag via reflection to ensure independent initialization for each test</li>
+ *   <li>Use JUnit TemporaryFolder to create isolated temporary test data directories</li>
+ *   <li>Test coverage: singleton pattern, ID allocation (allocateNextApplicantId),
+ *       application index rebuild, email sync, MO↔TA messages, user queries, etc.</li>
  * </ul>
  */
-@DisplayName("DataStore 工具测试")
+@DisplayName("DataStore Utility Tests")
 class DataStoreTest {
 
     private static final Path TEST_DATA_SOURCE =
             Path.of(System.getProperty("user.dir"),
                     "src", "test", "resources", "data");
 
-    // JUnit 5 独立 JAR 不含 org.junit.jupiter.api.io.TempDir，故使用手动临时目录
+    // JUnit 5 standalone JAR does not include org.junit.jupiter.api.io.TempDir, so manual temporary directory is used
     private static Path tempDataDir;
 
     @BeforeAll
     static void setupClass() throws Exception {
-        // 创建临时目录
+        // Create temporary directory
         tempDataDir = Files.createTempDirectory("smartta-test-");
         if (TEST_DATA_SOURCE.toFile().exists()) {
             Files.walk(TEST_DATA_SOURCE)
@@ -54,7 +54,7 @@ class DataStoreTest {
 
     @AfterAll
     static void cleanupClass() throws Exception {
-        // 递归删除临时目录
+        // Recursively delete temporary directory
         if (tempDataDir != null && tempDataDir.toFile().exists()) {
             deleteRecursively(tempDataDir.toFile());
         }
@@ -83,7 +83,7 @@ class DataStoreTest {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 辅助：重置单例
+    // Helper: Reset singleton
     // ─────────────────────────────────────────────────────────
 
     private static void resetSingleton() throws Exception {
@@ -97,11 +97,11 @@ class DataStoreTest {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 单例测试
+    // Singleton tests
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("getInstance() 每次返回同一引用")
+    @DisplayName("getInstance() always returns the same reference")
     void singleton_alwaysSameInstance() {
         DataStore a = DataStore.getInstance();
         DataStore b = DataStore.getInstance();
@@ -109,12 +109,12 @@ class DataStoreTest {
     }
 
     // ─────────────────────────────────────────────────────────
-    // ID 分配测试
+    // ID allocation tests
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("allocateNextApplicantId() 格式为 A + 3 位数字（健壮版）")
-    @Disabled("counter 可能被已有数据初始化为 1000+，导致 ID 变成 A1000，改为验证多次调用唯一性")
+    @DisplayName("allocateNextApplicantId() format is A + 3 digits (robust version)")
+    @Disabled("Counter may be initialized to 1000+ by existing data, causing ID to become A1000. Changed to verify uniqueness across multiple calls")
     void applicantId_format() {
         DataStore ds = DataStore.getInstance();
         String id = ds.allocateNextApplicantId();
@@ -123,7 +123,7 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("allocateNextApplicantId() 每次调用返回不同 ID")
+    @DisplayName("allocateNextApplicantId() returns different IDs for each call")
     void applicantId_unique() {
         DataStore ds = DataStore.getInstance();
         Set<String> ids = new HashSet<>();
@@ -134,11 +134,11 @@ class DataStoreTest {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 申请索引测试
+    // Application index tests
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("getApplicationsByApplicantId() 按申请人 ID 正确过滤")
+    @DisplayName("getApplicationsByApplicantId() correctly filters by applicant ID")
     void applicationsByApplicant() {
         DataStore ds = DataStore.getInstance();
         List<Application> apps = ds.getApplicationsByApplicantId("A001");
@@ -149,7 +149,7 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("getApplicationsByPositionCode() 按职位代码正确过滤")
+    @DisplayName("getApplicationsByPositionCode() correctly filters by position code")
     void applicationsByPosition() {
         DataStore ds = DataStore.getInstance();
         List<Application> apps = ds.getApplications();
@@ -164,7 +164,7 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("getApplication() 精确匹配")
+    @DisplayName("getApplication() exact match")
     void getApplication_exactMatch() {
         DataStore ds = DataStore.getInstance();
         List<Application> apps = ds.getApplications();
@@ -177,14 +177,14 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("getApplication() 不存在时返回 null")
+    @DisplayName("getApplication() returns null when not found")
     void getApplication_notFound() {
         DataStore ds = DataStore.getInstance();
         assertNull(ds.getApplication("NONEXISTENT", "NONEXISTENT"));
     }
 
     @Test
-    @DisplayName("getApplicationById() 按申请记录 ID 查询")
+    @DisplayName("getApplicationById() queries by application record ID")
     void getApplicationById() {
         DataStore ds = DataStore.getInstance();
         List<Application> apps = ds.getApplications();
@@ -197,7 +197,7 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("null 参数不抛异常，返回空列表或 null")
+    @DisplayName("null parameters do not throw exceptions, return empty list or null")
     void nullSafety() {
         DataStore ds = DataStore.getInstance();
         assertTrue(ds.getApplicationsByApplicantId(null).isEmpty());
@@ -207,11 +207,11 @@ class DataStoreTest {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 职位操作测试
+    // Position operation tests
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("positionCodeExists() 不区分大小写")
+    @DisplayName("positionCodeExists() is case-insensitive")
     void positionCodeExists_caseInsensitive() {
         DataStore ds = DataStore.getInstance();
         assertTrue(ds.positionCodeExists("EBU6304"));
@@ -221,7 +221,7 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("getPositionByCode() 大小写不敏感")
+    @DisplayName("getPositionByCode() is case-insensitive")
     void getPositionByCode_caseInsensitive() {
         DataStore ds = DataStore.getInstance();
         Position p = ds.getPositionByCode("ebu6304");
@@ -231,50 +231,60 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("addPosition() 正常添加")
+    @DisplayName("addPosition() normal addition")
     void addPosition_normal() {
         DataStore ds = DataStore.getInstance();
-        Position p = new Position("TEST001", "Test Course",
+        // Use unique ID to avoid conflicts between tests
+        String uniqueCode = "TEST001_" + System.currentTimeMillis();
+        Position p = new Position(uniqueCode, "Test Course",
                 Arrays.asList("Java"), 5, 2, "2026-12-31", "Prof. Test");
         p.setPostedByUsername("testuser");
 
         ds.addPosition(p);
 
-        assertNotNull(ds.getPositionByCode("TEST001"));
-        assertEquals("Test Course", ds.getPositionByCode("TEST001").getName());
+        assertNotNull(ds.getPositionByCode(uniqueCode));
+        assertEquals("Test Course", ds.getPositionByCode(uniqueCode).getName());
     }
 
     @Test
-    @DisplayName("addPosition() 重复 code 抛异常")
+    @DisplayName("addPosition() duplicate code throws exception")
     void addPosition_duplicateCode() {
         DataStore ds = DataStore.getInstance();
-        Position p = new Position("EBU6304", "Dup Course",
+        // Use unique ID to avoid conflicts between tests
+        String uniqueCode = "DUPTEST_" + System.currentTimeMillis();
+        // Add a position first
+        Position p1 = new Position(uniqueCode, "First Course",
                 Arrays.asList("Java"), 5, 2, "2026-12-31", "Prof.");
+        ds.addPosition(p1);
 
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> ds.addPosition(p));
+        // Try to add position with same code, should throw exception
+        Position p2 = new Position(uniqueCode, "Dup Course",
+                Arrays.asList("Python"), 8, 3, "2026-12-31", "Prof.");
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> ds.addPosition(p2));
         assertTrue(ex.getMessage().contains("already exists"));
     }
 
     @Test
-    @DisplayName("addPosition() null 参数抛 IllegalArgumentException")
+    @DisplayName("addPosition() null parameter throws IllegalArgumentException")
     void addPosition_null() {
         DataStore ds = DataStore.getInstance();
         assertThrows(IllegalArgumentException.class, () -> ds.addPosition(null));
     }
 
     // ─────────────────────────────────────────────────────────
-    // 用户操作测试
+    // User operation tests
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("getUserByUsername() 不存在时返回 null")
+    @DisplayName("getUserByUsername() returns null when not found")
     void getUserByUsername_notFound() {
         DataStore ds = DataStore.getInstance();
         assertNull(ds.getUserByUsername("totally_nonexistent_xyz"));
     }
 
     @Test
-    @DisplayName("saveUser() 正常保存（新增）")
+    @DisplayName("saveUser() normal save (new user)")
     void saveUser_newUser() {
         DataStore ds = DataStore.getInstance();
         User u = new User("newuser_test", User.hashPassword("pass123"),
@@ -290,14 +300,14 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("saveUser() null 参数抛 IllegalArgumentException")
+    @DisplayName("saveUser() null parameter throws IllegalArgumentException")
     void saveUser_null() {
         DataStore ds = DataStore.getInstance();
         assertThrows(IllegalArgumentException.class, () -> ds.saveUser(null));
     }
 
     @Test
-    @DisplayName("removeUserByUsername() 正常删除")
+    @DisplayName("removeUserByUsername() normal deletion")
     void removeUserByUsername() {
         DataStore ds = DataStore.getInstance();
         User u = new User("todelete", User.hashPassword("pass"), "Delete Me", "del@test.com");
@@ -310,14 +320,14 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("removeUserByUsername() 不存在时返回 false")
+    @DisplayName("removeUserByUsername() returns false when not found")
     void removeUserByUsername_notFound() {
         DataStore ds = DataStore.getInstance();
         assertFalse(ds.removeUserByUsername("nonexistent_delete_user"));
     }
 
     @Test
-    @DisplayName("findUserByApplicantId() 按申请者 ID 查找关联用户")
+    @DisplayName("findUserByApplicantId() finds associated user by applicant ID")
     void findUserByApplicantId() {
         DataStore ds = DataStore.getInstance();
         User u = ds.findUserByApplicantId("A001");
@@ -327,18 +337,18 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("findUserByApplicantId() 不存在时返回 null")
+    @DisplayName("findUserByApplicantId() returns null when not found")
     void findUserByApplicantId_notFound() {
         DataStore ds = DataStore.getInstance();
         assertNull(ds.findUserByApplicantId("A999"));
     }
 
     // ─────────────────────────────────────────────────────────
-    // 申请者操作测试
+    // Applicant operation tests
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("saveApplicant() 正常保存（新增）")
+    @DisplayName("saveApplicant() normal save (new)")
     void saveApplicant_new() {
         DataStore ds = DataStore.getInstance();
         TAPplicant ta = new TAPplicant("A999", "Test TA", "test@bupt.cn",
@@ -352,26 +362,26 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("saveApplicant() null 参数抛 IllegalArgumentException")
+    @DisplayName("saveApplicant() null parameter throws IllegalArgumentException")
     void saveApplicant_null() {
         DataStore ds = DataStore.getInstance();
         assertThrows(IllegalArgumentException.class, () -> ds.saveApplicant(null));
     }
 
     // ─────────────────────────────────────────────────────────
-    // 工作量操作测试
+    // Workload operation tests
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("getWorkloadHours() 默认返回 0（无数据时）")
-    @Disabled("workloadHours 数据在测试间持久化，依赖文件初始状态，改为 roundTrip 测试验证功能")
+    @DisplayName("getWorkloadHours() returns 0 by default (when no data)")
+    @Disabled("workloadHours data persists between tests, depends on file initial state, changed to roundTrip test to verify functionality")
     void workloadHours_default() {
         DataStore ds = DataStore.getInstance();
         assertEquals(0, ds.getWorkloadHours("A999"));
     }
 
     @Test
-    @DisplayName("setWorkloadHours() → getWorkloadHours() 读写一致")
+    @DisplayName("setWorkloadHours() → getWorkloadHours() read-write consistency")
     void workloadHours_roundTrip() {
         DataStore ds = DataStore.getInstance();
         ds.setWorkloadHours("A999", 12);
@@ -379,18 +389,18 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("getWorkloadHours() null 参数返回 0")
+    @DisplayName("getWorkloadHours() null parameter returns 0")
     void workloadHours_null() {
         DataStore ds = DataStore.getInstance();
         assertEquals(0, ds.getWorkloadHours(null));
     }
 
     // ─────────────────────────────────────────────────────────
-    // MO↔TA 消息测试
+    // MO↔TA message tests
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("addMoTaMessage() 正常添加")
+    @DisplayName("addMoTaMessage() normal addition")
     void addMoTaMessage() {
         DataStore ds = DataStore.getInstance();
         MoTaMessage m = MoTaMessage.create(
@@ -406,14 +416,14 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("addMoTaMessage() null 不抛异常")
+    @DisplayName("addMoTaMessage() null does not throw exception")
     void addMoTaMessage_null() {
         DataStore ds = DataStore.getInstance();
         assertDoesNotThrow(() -> ds.addMoTaMessage(null));
     }
 
     @Test
-    @DisplayName("markMoTaThreadRead() 标记消息为已读")
+    @DisplayName("markMoTaThreadRead() marks message as read")
     void markMoTaThreadRead() {
         DataStore ds = DataStore.getInstance();
         MoTaMessage m = MoTaMessage.create(
@@ -430,7 +440,7 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("countUnreadMoTaForUser() 正确统计未读数")
+    @DisplayName("countUnreadMoTaForUser() correctly counts unread messages")
     void countUnreadMoTaForUser() {
         DataStore ds = DataStore.getInstance();
         MoTaMessage m = MoTaMessage.create(
@@ -444,18 +454,18 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("countUnreadMoTaForUser() null 用户返回 0")
+    @DisplayName("countUnreadMoTaForUser() null user returns 0")
     void countUnreadMoTaForUser_null() {
         DataStore ds = DataStore.getInstance();
         assertEquals(0, ds.countUnreadMoTaForUser(null));
     }
 
     // ─────────────────────────────────────────────────────────
-    // SystemConfig 测试
+    // SystemConfig tests
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("getSystemConfig() 懒加载成功")
+    @DisplayName("getSystemConfig() lazy loading succeeds")
     void systemConfig_lazyLoad() {
         DataStore ds = DataStore.getInstance();
         SystemConfig cfg = ds.getSystemConfig();
@@ -463,7 +473,7 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("SystemConfig 默认值：版本非空")
+    @DisplayName("SystemConfig defaults: version is not empty")
     void systemConfig_defaults() {
         DataStore ds = DataStore.getInstance();
         SystemConfig cfg = ds.getSystemConfig();
@@ -474,7 +484,7 @@ class DataStoreTest {
     }
 
     @Test
-    @DisplayName("SystemConfig.WorkloadConfig 默认值正确")
+    @DisplayName("SystemConfig.WorkloadConfig defaults are correct")
     void systemConfig_workloadConfig() {
         DataStore ds = DataStore.getInstance();
         SystemConfig.WorkloadConfig wc = ds.getSystemConfig().getWorkloadConfig();

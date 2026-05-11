@@ -21,14 +21,21 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Admin / MO 下载 TA 已上传的 CV（存储于 cv_uploads，文件名为 UUID）。
+ * Handles CV file download requests for ADMIN and MO roles.
  *
- * <p>权限规则：
+ * <p>This servlet processes GET requests to {@code /download} and serves TA CV files
+ * stored in the {@code cv_uploads/} directory. Permission rules:</p>
  * <ul>
- *   <li>ADMIN（任意）：始终可下载任意 TA 的 CV</li>
- *   <li>MO（仅本人发布职位下申请者）：可下载已提交/待审核 TA 的 CV，
- *       下载时自动将申请状态从 Submitted 推进到 Under Review</li>
+ *   <li>ADMIN (any view): may download any TA's CV</li>
+ *   <li>MO (own positions only): may download CVs of applicants who have applied to
+ *       positions the MO created; when a CV is downloaded the associated application
+ *       status is automatically advanced from "Submitted" to "Under Review"</li>
  * </ul>
+ *
+ * <p>CV filenames on disk are UUIDs (assigned at upload time). The {@code applicantId}
+ * parameter is used to look up the UUID from the applicant record.</p>
+ *
+ * @see UploadServlet
  */
 public class DownloadServlet extends HttpServlet {
 
@@ -63,7 +70,8 @@ public class DownloadServlet extends HttpServlet {
         }
 
         // MO 可下载其发布职位下申请者的 CV，并在下载时自动推进状态
-        if ("MO".equals(currentRole)) {
+        // 也允许同时拥有 MO 角色的用户（即使当前切换为 TA）下载
+        if ("MO".equals(currentRole) || (username != null && isMoUser(username))) {
             if (moMayDownloadCv(username, applicantId)) {
                 advanceStatusToUnderReview(username, applicantId);
                 serveCv(req, resp, applicantId);
@@ -90,14 +98,40 @@ public class DownloadServlet extends HttpServlet {
             if (!applicantId.equalsIgnoreCase(a.getApplicantId())) continue;
             Position p = DS.getPositionByCode(a.getPositionCode());
             if (p == null) continue;
+            
+            // 优先使用 postedByUsername 匹配（更精确）
             if (p.getPostedByUsername() != null && !p.getPostedByUsername().trim().isEmpty()) {
-                if (p.getPostedByUsername().trim().equalsIgnoreCase(moUsername)) return true;
-            } else if (mo != null && mo.getDisplayName() != null && p.getPostedBy() != null
-                    && mo.getDisplayName().trim().equalsIgnoreCase(p.getPostedBy().trim())) {
-                return true;
+                String posMoUsername = p.getPostedByUsername().trim();
+                // 精确匹配
+                if (posMoUsername.equalsIgnoreCase(moUsername)) return true;
+                // 也允许当前用户名的部分匹配（如 mo 的 username 包含在 postedByUsername 中）
+                if (posMoUsername.toLowerCase().contains(moUsername.toLowerCase())) return true;
+                if (moUsername.toLowerCase().contains(posMoUsername.toLowerCase())) return true;
+            }
+            
+            // postedByUsername 为空时，使用 postedBy（显示名称）匹配
+            if (p.getPostedBy() != null && !p.getPostedBy().trim().isEmpty()) {
+                String posPostedBy = p.getPostedBy().trim();
+                // 精确匹配显示名称
+                if (mo != null && mo.getDisplayName() != null 
+                        && mo.getDisplayName().trim().equalsIgnoreCase(posPostedBy)) return true;
+                // 显示名称部分匹配
+                if (mo != null && mo.getDisplayName() != null 
+                        && mo.getDisplayName().trim().toLowerCase().contains(posPostedBy.toLowerCase())) return true;
+                if (mo != null && mo.getDisplayName() != null 
+                        && posPostedBy.toLowerCase().contains(mo.getDisplayName().trim().toLowerCase())) return true;
             }
         }
         return false;
+    }
+
+    /**
+     * 检查用户是否拥有 MO 角色（无论当前角色是什么）。
+     */
+    private boolean isMoUser(String username) {
+        if (username == null) return false;
+        User u = DS.getUserByUsername(username);
+        return u != null && u.hasRole("MO");
     }
 
     /**
@@ -111,28 +145,46 @@ public class DownloadServlet extends HttpServlet {
             if (!Application.STATUS_SUBMITTED.equals(a.getStatus())) continue;
             Position p = DS.getPositionByCode(a.getPositionCode());
             if (p == null) continue;
+            
             boolean isMine = false;
+            User mo = DS.getUserByUsername(moUsername);
+            
+            // 优先使用 postedByUsername 匹配（更精确）
             if (p.getPostedByUsername() != null && !p.getPostedByUsername().trim().isEmpty()) {
-                isMine = p.getPostedByUsername().trim().equalsIgnoreCase(moUsername);
-            } else {
-                User mo = DS.getUserByUsername(moUsername);
-                if (mo != null && mo.getDisplayName() != null && p.getPostedBy() != null
-                        && mo.getDisplayName().trim().equalsIgnoreCase(p.getPostedBy().trim())) {
-                    isMine = true;
+                String posMoUsername = p.getPostedByUsername().trim();
+                // 精确匹配
+                if (posMoUsername.equalsIgnoreCase(moUsername)) isMine = true;
+                // 部分匹配
+                else if (posMoUsername.toLowerCase().contains(moUsername.toLowerCase())) isMine = true;
+                else if (moUsername.toLowerCase().contains(posMoUsername.toLowerCase())) isMine = true;
+            }
+            
+            // postedByUsername 为空时，使用 postedBy（显示名称）匹配
+            if (!isMine && p.getPostedBy() != null && !p.getPostedBy().trim().isEmpty()) {
+                String posPostedBy = p.getPostedBy().trim();
+                if (mo != null && mo.getDisplayName() != null) {
+                    String moDisplayName = mo.getDisplayName().trim();
+                    // 精确匹配
+                    if (moDisplayName.equalsIgnoreCase(posPostedBy)) isMine = true;
+                    // 部分匹配
+                    else if (moDisplayName.toLowerCase().contains(posPostedBy.toLowerCase())) isMine = true;
+                    else if (posPostedBy.toLowerCase().contains(moDisplayName.toLowerCase())) isMine = true;
                 }
             }
-            if (!isMine) continue;
-            a.setStatus(Application.STATUS_REVIEW);
-            DS.updateApplication(a);
-            return;
+            
+            if (isMine) {
+                a.setStatus(Application.STATUS_REVIEW);
+                DS.updateApplication(a);
+                return;
+            }
         }
     }
 
     private void serveCv(HttpServletRequest req, HttpServletResponse resp, String applicantId) throws IOException {
         TAPplicant ta = DS.getApplicantById(applicantId);
         if (ta == null) {
-            writeFriendlyPage(req, resp, 200, "Applicant not found",
-                "No applicant record exists for this ID.");
+            writeFriendlyPage(req, resp, 200, "No CV uploaded yet",
+                "No applicant record exists for this ID. This may mean the TA has not filled in their profile, or the applicant does not exist in the system.");
             return;
         }
         String fn = ta.getCvFileName();

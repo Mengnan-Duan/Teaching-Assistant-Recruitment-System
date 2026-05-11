@@ -1,0 +1,12 @@
+[ {
+  "id" : "80dd7074-68a2-432a-b84a-f99769fb747f",
+  "moUsername" : "mosmith",
+  "taApplicantId" : "A018",
+  "fromUsername" : "taricky",
+  "fromDisplayName" : "ricky",
+  "fromRole" : "TA",
+  "toUsername" : "mosmith",
+  "body" : "111",
+  "sentAt" : "2026-04-11T14:59:18.521449Z",
+  "readByRecipient" : true
+} ]

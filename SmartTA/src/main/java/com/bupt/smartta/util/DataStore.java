@@ -2,23 +2,68 @@ package com.bupt.smartta.util;
 
 import com.bupt.smartta.model.*;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Singleton data-access layer for the Smart-TA platform.
+ *
+ * <p>{@code DataStore} manages all persistent data — positions, applicants, applications,
+ * users, workloads, audit logs, and MO-TA messages — backed by JSON files in the
+ * {@code data/} directory. It provides thread-safe CRUD operations, automatic
+ * application state transitions, application-index caching for fast lookups, and
+ * lazy-loaded system configuration.</p>
+ *
+ * <p>Data files are stored under {@code ${catalina.base}/webapps/SmartTA/data/} when
+ * running on Tomcat, or under {@code data/} relative to the webapp root in IDE
+ * development mode.</p>
+ *
+ * <p>This class is a singleton: obtain the single instance via {@link #getInstance()}
+ * and never construct it directly.</p>
+ *
+ * @see com.bupt.smartta.model.Position
+ * @see com.bupt.smartta.model.TAPplicant
+ * @see com.bupt.smartta.model.Application
+ * @see com.bupt.smartta.model.User
+ */
 public class DataStore {
     private static DataStore instance;
     private static final Object initLock = new Object();
-    private final JsonFileStore store;
 
-    private static final String POSITIONS    = "positions";
-    private static final String APPLICANTS   = "applicants";
-    private static final String APPLICATIONS = "applications";
-    private static final String LOGS        = "system_logs";
-    private static final String WORKLOADS   = "workloads";
-    private static final String USERS       = "users";
-    private static final String MOTA_MESSAGES = "mota_messages";
+    /** Jackson ObjectMapper shared across all read/write operations. */
+    private static final ObjectMapper MAPPER;
+    static {
+        MAPPER = new ObjectMapper();
+        MAPPER.registerModule(new JavaTimeModule());
+        MAPPER.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        MAPPER.enable(SerializationFeature.INDENT_OUTPUT);
+        // Ignore properties present in JSON but absent from Java classes (e.g., "permanentlyBlocked")
+        MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    }
+
+    private static final String POSITIONS      = "positions";
+    private static final String APPLICANTS     = "applicants";
+    private static final String APPLICATIONS   = "applications";
+    private static final String LOGS           = "system_logs";
+    private static final String WORKLOADS      = "workloads";
+    private static final String USERS          = "users";
+    private static final String MOTA_MESSAGES  = "mota_messages";
+    private static final String SYSTEM_CONFIG   = "system_config";
+    private static final String WORKLOAD_SUGGESTION = "workload_suggestion";
+
+    /** Absolute path to the data directory. */
+    private final String dataDir;
 
     private List<Position> positions;
     private List<TAPplicant> applicants;
@@ -27,22 +72,75 @@ public class DataStore {
     private Map<String, Integer> workloadHours;
     private List<User> users;
     private List<MoTaMessage> motaMessages;
+    private LLMService.RebalanceAdvice workloadSuggestion;
 
-    /** 申请者 ID 原子计数器，确保并发注册时 ID 不冲突 */
+    /** Atomic counter for generating sequential applicant IDs (e.g., A001, A002, ...). */
     private AtomicInteger applicantIdCounter;
 
-    /** 申请索引缓存，按申请人ID和职位代码双重索引，加速查询 */
+    /** In-memory application index: applicantId -> list of their applications. */
     private Map<String, List<Application>> applicationIndexByApplicant;
+    /** In-memory application index: positionCode -> list of applications for that position. */
     private Map<String, List<Application>> applicationIndexByPosition;
 
-    /** 标记是否已初始化（防止重复 seed） */
+    /** Flag indicating whether initial seed data has been loaded. */
     private volatile boolean initialized = false;
 
+    /**
+     * Private constructor — initialises the data directory path and loads all JSON files.
+     *
+     * <p>Search order for data directory:</p>
+     * <ol>
+     *   <li>{@code ${catalina.base}/webapps/SmartTA/data} (production Tomcat)</li>
+     *   <li>Derived from classpath (IDE development mode)</li>
+     * </ol>
+     *
+     * @throws SecurityException if the resolved path is deemed unsafe (path traversal attempt)
+     */
     private DataStore() {
-        String dataDir = System.getProperty("catalina.base")
-                     + "/webapps/SmartTA/data";
-        this.store = new JsonFileStore(dataDir);
+        // Production: catalina.base/webapps/SmartTA/data
+        // Fallback: derive from classpath (IDE development mode)
+        String catalinaBase = System.getProperty("catalina.base", "");
+        if (!catalinaBase.isEmpty()) {
+            this.dataDir = catalinaBase + File.separator + "webapps" + File.separator + "SmartTA" + File.separator + "data";
+        } else {
+            String classPath = getClass().getProtectionDomain().getCodeSource().getLocation().getPath();
+            File classDir = new File(classPath).getParentFile();
+            File webInfDir = classDir != null ? classDir.getParentFile() : null;
+            File webappDir = webInfDir != null ? webInfDir.getParentFile() : null;
+            this.dataDir = webappDir != null ? webappDir.getPath() + File.separator + "data" : "data";
+        }
+
+        // Path safety check: reject absolute paths, drive letters, or path-traversal sequences
+        if (!isPathSafe(this.dataDir)) {
+            throw new SecurityException("DataStore path contains potentially unsafe characters: " + this.dataDir);
+        }
+
+        System.out.println("[DataStore] ========== Initialization Start ==========");
+        System.out.println("[DataStore] dataDir = " + dataDir);
+        System.out.println("[DataStore] dataDir exists = " + new File(dataDir).exists());
+
         loadAll();
+
+        System.out.println("[DataStore] positions loaded: " + positions.size());
+        System.out.println("[DataStore] applicants loaded: " + applicants.size());
+        System.out.println("[DataStore] users loaded: " + users.size());
+        System.out.println("[DataStore] ========== Initialization Complete ==========");
+    }
+
+    /**
+     * Validates that the given path does not contain path-traversal sequences or
+     * other suspicious patterns that could be exploited in an attack.
+     *
+     * @param path the path to validate
+     * @return {@code true} if the path is considered safe, {@code false} otherwise
+     */
+    private static boolean isPathSafe(String path) {
+        if (path == null || path.isEmpty()) return false;
+        String normalized = path.replace("\\", "/");
+        if (normalized.contains("..")) return false;  // parent-directory reference
+        if (normalized.startsWith("/")) return false; // absolute path
+        if (path.matches("^[A-Za-z]:[/\\\\].*")) return false; // drive letter
+        return true;
     }
 
     public static DataStore getInstance() {
@@ -56,15 +154,21 @@ public class DataStore {
         return instance;
     }
 
-    public synchronized void loadAll() {
-        positions    = store.load(POSITIONS,    new TypeReference<List<Position>>(){});
-        applicants   = store.load(APPLICANTS,   new TypeReference<List<TAPplicant>>(){});
-        applications = store.load(APPLICATIONS, new TypeReference<List<Application>>(){});
-        logs         = store.load(LOGS,         new TypeReference<List<SystemLog>>(){});
-        workloadHours = store.loadObject(WORKLOADS, HashMap.class);
-        users        = store.load(USERS,        new TypeReference<List<User>>(){});
-        motaMessages = store.load(MOTA_MESSAGES, new TypeReference<List<MoTaMessage>>(){});
+    // ============================================================
+    // Load all data: read JSON files directly
+    // ============================================================
+    private synchronized void loadAll() {
+        // Simple direct load
+        positions     = loadList(POSITIONS, Position.class);
+        applicants    = loadList(APPLICANTS, TAPplicant.class);
+        applications  = loadList(APPLICATIONS, Application.class);
+        logs          = loadList(LOGS, SystemLog.class);
+        workloadHours = loadObject(WORKLOADS, HashMap.class);
+        users         = loadList(USERS, User.class);
+        motaMessages  = loadList(MOTA_MESSAGES, MoTaMessage.class);
+        workloadSuggestion = loadObject(WORKLOAD_SUGGESTION, LLMService.RebalanceAdvice.class);
 
+        // Null safety
         if (workloadHours == null) workloadHours = new HashMap<>();
         if (positions    == null) positions    = new ArrayList<>();
         if (applicants   == null) applicants   = new ArrayList<>();
@@ -76,7 +180,6 @@ public class DataStore {
         initApplicantIdCounter();
         rebuildApplicationIndexes();
 
-        // 只在首次初始化时执行 seed（initialized 标记控制）
         if (!initialized) {
             if (workloadHours.isEmpty()) seedWorkloads();
             if (positions.isEmpty())    seedPositions();
@@ -91,10 +194,63 @@ public class DataStore {
         }
     }
 
-    /**
-     * 从已有申请者列表中初始化原子计数器，
-     * 确保新生成的 ID 永不与已有 ID 冲突。
-     */
+    // ============================================================
+    // Simple load: read file directly, no locking
+    // ============================================================
+    private <T> List<T> loadList(String name, Class<T> clazz) {
+        Path path = Paths.get(dataDir, name + ".json");
+        if (!Files.exists(path)) {
+            System.out.println("[DataStore] File not found: " + path);
+            return new ArrayList<>();
+        }
+        try {
+            String json = Files.readString(path);
+            List<T> result = MAPPER.readValue(json,
+                MAPPER.getTypeFactory().constructCollectionType(ArrayList.class, clazz));
+            System.out.println("[DataStore] Loaded " + name + ".json, count: " + result.size());
+            return result;
+        } catch (Exception e) {
+            System.err.println("[DataStore] Failed to load " + name + ".json: " + e.getClass().getName() + " - " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    private <T> T loadObject(String name, Class<T> clazz) {
+        Path path = Paths.get(dataDir, name + ".json");
+        if (!Files.exists(path)) {
+            System.out.println("[DataStore] File not found: " + path);
+            return null;
+        }
+        try {
+            String json = Files.readString(path);
+            return MAPPER.readValue(json, clazz);
+        } catch (Exception e) {
+            System.err.println("[DataStore] Failed to load " + name + ".json (object): " + e.getMessage());
+            return null;
+        }
+    }
+
+    // ============================================================
+    // Simple save: write file directly
+    // ============================================================
+    private <T> void saveList(String name, List<T> list) throws IOException {
+        Path path = Paths.get(dataDir, name + ".json");
+        String json = MAPPER.writeValueAsString(list);
+        Files.writeString(path, json);
+        System.out.println("[DataStore] Saved " + name + ".json, count: " + list.size());
+    }
+
+    private <T> void saveObject(String name, Object obj) throws IOException {
+        Path path = Paths.get(dataDir, name + ".json");
+        String json = MAPPER.writeValueAsString(obj);
+        Files.writeString(path, json);
+        System.out.println("[DataStore] Saved " + name + ".json (object)");
+    }
+
+    // ============================================================
+    // Applicant ID counter
+    // ============================================================
     private void initApplicantIdCounter() {
         int maxId = 0;
         for (TAPplicant a : applicants) {
@@ -107,63 +263,18 @@ public class DataStore {
         applicantIdCounter = new AtomicInteger(maxId + 1);
     }
 
-    /**
-     * 分配下一个唯一的申请者 ID，使用原子计数器保证线程安全。
-     */
     public String allocateNextApplicantId() {
         return "A" + String.format("%03d", applicantIdCounter.getAndIncrement());
     }
 
-    // ---- Seed 数据 ----
-
-    private void seedPositions() {
-        positions = new ArrayList<>();
-        Position p1 = new Position("EBU6304","Software Engineering",
-            Arrays.asList("Java","Agile","Git"), 8, 2, "2026-04-15", "Dr. J. Smith");
-        p1.setPostedByUsername("mosmith");
-        positions.add(p1);
-        positions.add(new Position("EBU5476","Database Systems",
-            Arrays.asList("SQL","Python","Linux"), 6, 3, "2026-04-20", "Dr. A. Lee"));
-        positions.add(new Position("EBU4010","Computer Networks",
-            Arrays.asList("Python","TCP/IP","Linux"), 4, 2, "2026-04-18", "Prof. W. Chen"));
-        savePositions();
-    }
-
-    private void seedApplicants() {
-        applicants = new ArrayList<>();
-        applicants.add(new TAPplicant("A001","Zhang Wei","zhangwei@bupt.edu.cn","Year 3",3.7,Arrays.asList("Java","Agile","Git","SQL"),12));
-        applicants.add(new TAPplicant("A002","Li Mei","limei@bupt.edu.cn","Year 2",3.5,Arrays.asList("Java","Git","SQL","Python"),16));
-        applicants.add(new TAPplicant("A003","Wang Hao","wanghao@bupt.edu.cn","Year 3",3.3,Arrays.asList("Java","Python"),6));
-        applicants.add(new TAPplicant("A004","Chen Yu","chenyu@bupt.edu.cn","Year 4",3.8,Arrays.asList("Java","Agile","Git","SQL"),4));
-        applicants.add(new TAPplicant("A005","Zhao Lin","zhaolin@bupt.edu.cn","Year 2",3.2,Arrays.asList("Python","Git"),14));
-        applicants.add(new TAPplicant("A006","Liu Na","liuna@bupt.edu.cn","Year 3",3.6,Arrays.asList("Java","Python","SQL"),10));
-        applicants.add(new TAPplicant("A007","Zhang Yunhe","yunhezhang@bupt.edu.cn","Year 2",3.4,Arrays.asList("Java","Git","SQL"),10));
-        applicants.add(new TAPplicant("A008","System Administrator","admin@bupt.edu.cn","Staff",0.0,Arrays.asList("System Administration","Java","Security"),0));
-        saveApplicants();
-    }
-
-    private void seedApplications() {
-        applications = new ArrayList<>();
-        if (!applicants.isEmpty() && !positions.isEmpty()) {
-            TAPplicant ta = applicants.get(0);
-            Position pos = positions.get(0);
-            int score = (int) ta.computeAIScore(pos.getRequiredSkills(), pos.getHoursPerWeek());
-            Application app = new Application(ta.getId(), ta.getName(),
-                pos.getCode(), pos.getName(), score);
-            app.setStatus(Application.STATUS_REVIEW);
-            applications.add(app);
-
-            if (applicants.size() > 1) {
-                TAPplicant ta2 = applicants.get(1);
-                int score2 = (int) ta2.computeAIScore(pos.getRequiredSkills(), pos.getHoursPerWeek());
-                Application app2 = new Application(ta2.getId(), ta2.getName(),
-                    pos.getCode(), pos.getName(), score2);
-                applications.add(app2);
-            }
-        }
-        saveApplications();
-    }
-
+    // ---- Seed Data ----
+    /**
+     * Seeds initial workload entries for all existing applicants.
+     * Called only when the workloads file is empty during initialisation.
+     */
+    private void seedPositions() { /* Data cleared — no auto-seeding */ }
+    private void seedApplicants() { /* Data cleared — no auto-seeding */ }
+    private void seedApplications() { /* Data cleared — no auto-seeding */ }
     private void seedWorkloads() {
         for (TAPplicant ta : applicants) {
             if (ta == null) continue;
@@ -176,10 +287,6 @@ public class DataStore {
         saveWorkloadsQuietly();
     }
 
-    /**
-     * 自动同步 User.email 与 TAPplicant.email（优先 User.email）。
-     * 每次登录时由 AuthServlet 调用，确保两边邮箱一致。
-     */
     public void syncUserAndApplicantEmails(String username) {
         User user = getUserByUsername(username);
         if (user == null) return;
@@ -198,31 +305,9 @@ public class DataStore {
         }
     }
 
-    private void seedUsers() {
-        users = new ArrayList<>();
-        User admin = new User("admin", User.hashPassword("admin123"), "System Admin", "admin@bupt.edu.cn");
-        admin.addRole("ADMIN"); admin.addRole("MO"); admin.addRole("TA");
-        admin.setApplicantId("A008");
-        users.add(admin);
+    private void seedUsers() { /* Data cleared — no auto-seeding */ }
 
-        User mo = new User("mosmith", User.hashPassword("mo123"), "Dr. J. Smith", "jsmith@bupt.edu.cn");
-        mo.addRole("MO"); mo.addRole("TA");
-        users.add(mo);
-
-        User ta1 = new User("zhangwei", User.hashPassword("ta123"), "Zhang Wei", "zhangwei@bupt.edu.cn");
-        ta1.addRole("TA"); ta1.setApplicantId("A001");
-        users.add(ta1);
-
-        User ta2 = new User("limei", User.hashPassword("ta123"), "Li Mei", "limei@bupt.edu.cn");
-        ta2.addRole("TA"); ta2.setApplicantId("A002");
-        users.add(ta2);
-
-        saveUsersQuietly();
-    }
-
-    /**
-     * 重建申请索引缓存，在数据加载和变更后调用。
-     */
+    // ---- Application Index ----
     private void rebuildApplicationIndexes() {
         applicationIndexByApplicant = new HashMap<>();
         applicationIndexByPosition = new HashMap<>();
@@ -244,8 +329,7 @@ public class DataStore {
         }
     }
 
-    // ---- 职位操作 ----
-
+    // ---- Position Operations ----
     public List<Position> getPositions() { return new ArrayList<>(positions); }
 
     public Position getPositionByCode(String code) {
@@ -255,7 +339,6 @@ public class DataStore {
                 .findFirst().orElse(null);
     }
 
-    /** 检查职位代码是否已存在（不区分大小写） */
     public boolean positionCodeExists(String code) {
         if (code == null) return false;
         return positions.stream()
@@ -266,7 +349,6 @@ public class DataStore {
     public void addPosition(Position p) {
         if (p == null) throw new IllegalArgumentException("Position cannot be null");
         synchronized (initLock) {
-            // 幂等性保护：检查 code 是否已存在
             if (positionCodeExists(p.getCode())) {
                 throw new RuntimeException("Position code already exists: " + p.getCode());
             }
@@ -279,10 +361,9 @@ public class DataStore {
         }
     }
 
-    /** 静默保存（用于 seed 阶段，不记录日志避免递归） */
     private boolean savePositionsQuietly() {
         try {
-            store.save(POSITIONS, positions);
+            saveList(POSITIONS, positions);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save positions: " + e.getMessage());
@@ -292,7 +373,7 @@ public class DataStore {
 
     public boolean savePositions() {
         try {
-            store.save(POSITIONS, positions);
+            saveList(POSITIONS, positions);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save positions: " + e.getMessage());
@@ -301,8 +382,7 @@ public class DataStore {
         }
     }
 
-    // ---- 申请者操作 ----
-
+    // ---- Applicant Operations ----
     public List<TAPplicant> getApplicants() { return new ArrayList<>(applicants); }
 
     public TAPplicant getApplicantById(String id) {
@@ -344,7 +424,7 @@ public class DataStore {
 
     private boolean saveApplicantsQuietly() {
         try {
-            store.save(APPLICANTS, applicants);
+            saveList(APPLICANTS, applicants);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save applicants: " + e.getMessage());
@@ -354,7 +434,7 @@ public class DataStore {
 
     public boolean saveApplicants() {
         try {
-            store.save(APPLICANTS, applicants);
+            saveList(APPLICANTS, applicants);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save applicants: " + e.getMessage());
@@ -366,8 +446,7 @@ public class DataStore {
     private boolean saveApplicantQuietly(TAPplicant a) {
         if (a == null) return false;
         try {
-            // 重新保存整个 applicants 列表
-            store.save(APPLICANTS, applicants);
+            saveList(APPLICANTS, applicants);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save applicant quietly: " + e.getMessage());
@@ -378,7 +457,7 @@ public class DataStore {
     private boolean saveUserQuietly(User u) {
         if (u == null) return false;
         try {
-            store.save(USERS, users);
+            saveList(USERS, users);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save user quietly: " + e.getMessage());
@@ -386,8 +465,7 @@ public class DataStore {
         }
     }
 
-    // ---- 申请表操作 ----
-
+    // ---- Application Operations ----
     public List<Application> getApplications() { return new ArrayList<>(applications); }
 
     public List<Application> getApplicationsByApplicantId(String applicantId) {
@@ -411,7 +489,6 @@ public class DataStore {
             .findFirst().orElse(null);
     }
 
-    /** 通过申请记录 ID 查询（新增，提高效率） */
     public Application getApplicationById(String id) {
         if (id == null) return null;
         return applications.stream()
@@ -439,9 +516,7 @@ public class DataStore {
         }
     }
 
-    /** 增量更新申请索引（替代全量重建，提升性能） */
     private void updateApplicationIndexes(Application app, String oldApplicantId, String oldPositionCode) {
-        // 从旧索引中移除
         if (oldApplicantId != null) {
             List<Application> oldAidList = applicationIndexByApplicant.get(oldApplicantId.toUpperCase());
             if (oldAidList != null) oldAidList.remove(app);
@@ -450,7 +525,6 @@ public class DataStore {
             List<Application> oldPcodeList = applicationIndexByPosition.get(oldPositionCode.toUpperCase());
             if (oldPcodeList != null) oldPcodeList.remove(app);
         }
-        // 添加到新索引
         String aidKey = app.getApplicantId() != null ? app.getApplicantId().toUpperCase() : "";
         String pcodeKey = app.getPositionCode() != null ? app.getPositionCode().toUpperCase() : "";
         applicationIndexByApplicant.computeIfAbsent(aidKey, k -> new ArrayList<>()).add(app);
@@ -469,9 +543,8 @@ public class DataStore {
                     applications.set(i, app);
                     updateApplicationIndexes(app, oldApplicantId, oldPositionCode);
                     if (!saveApplicationsQuietly()) {
-                        // 回滚索引
                         updateApplicationIndexes(applications.get(i), app.getApplicantId(), app.getPositionCode());
-                        applications.set(i, applications.get(i)); // 恢复原值
+                        applications.set(i, applications.get(i));
                         throw new RuntimeException("Failed to save applications.json");
                     }
                     addLog(SystemLog.OP_WRITE, APPLICATIONS + ".json", SystemLog.STATUS_OK);
@@ -483,7 +556,7 @@ public class DataStore {
 
     private boolean saveApplicationsQuietly() {
         try {
-            store.save(APPLICATIONS, applications);
+            saveList(APPLICATIONS, applications);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save applications: " + e.getMessage());
@@ -493,7 +566,7 @@ public class DataStore {
 
     public boolean saveApplications() {
         try {
-            store.save(APPLICATIONS, applications);
+            saveList(APPLICATIONS, applications);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save applications: " + e.getMessage());
@@ -502,8 +575,7 @@ public class DataStore {
         }
     }
 
-    // ---- 日志操作 ----
-
+    // ---- Log Operations ----
     public List<SystemLog> getLogs() { return new ArrayList<>(logs); }
 
     public void addLog(String op, String file, String status) {
@@ -519,14 +591,13 @@ public class DataStore {
         logs.add(0, log);
         if (logs.size() > 200) logs = new ArrayList<>(logs.subList(0, 200));
         try {
-            store.save(LOGS, logs);
+            saveList(LOGS, logs);
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save logs: " + e.getMessage());
         }
     }
 
-    // ---- 工作量操作 ----
-
+    // ---- Workload Operations ----
     public Map<String, Integer> getWorkloadHours() { return new HashMap<>(workloadHours); }
 
     public void setWorkloadHours(String applicantId, int hours) {
@@ -534,7 +605,7 @@ public class DataStore {
         synchronized (initLock) {
             workloadHours.put(applicantId, hours);
             try {
-                store.saveObject(WORKLOADS, workloadHours);
+                saveObject(WORKLOADS, workloadHours);
             } catch (IOException e) {
                 System.err.println("[DataStore] Failed to save workloads: " + e.getMessage());
                 addLog(SystemLog.OP_WRITE, WORKLOADS + ".json", SystemLog.STATUS_FAIL, e.getMessage());
@@ -552,7 +623,7 @@ public class DataStore {
 
     private boolean saveWorkloadsQuietly() {
         try {
-            store.saveObject(WORKLOADS, workloadHours);
+            saveObject(WORKLOADS, workloadHours);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save workloads: " + e.getMessage());
@@ -560,13 +631,39 @@ public class DataStore {
         }
     }
 
-    // ---- 用户操作 ----
+    // ---- Pending Workload Suggestion Operations ----
+    public LLMService.RebalanceAdvice getPendingWorkloadSuggestion() {
+        return workloadSuggestion;
+    }
 
+    public void saveWorkloadSuggestion(LLMService.RebalanceAdvice suggestion) {
+        synchronized (initLock) {
+            this.workloadSuggestion = suggestion;
+            try {
+                saveObject(WORKLOAD_SUGGESTION, suggestion);
+            } catch (IOException e) {
+                System.err.println("[DataStore] Failed to save workload_suggestion: " + e.getMessage());
+                throw new RuntimeException("Failed to save workload_suggestion.json");
+            }
+            addLog(SystemLog.OP_WRITE, WORKLOAD_SUGGESTION + ".json", SystemLog.STATUS_OK);
+        }
+    }
+
+    public void clearWorkloadSuggestion() {
+        synchronized (initLock) {
+            this.workloadSuggestion = null;
+            try {
+                saveObject(WORKLOAD_SUGGESTION, null);
+            } catch (IOException e) {
+                System.err.println("[DataStore] Failed to clear workload_suggestion: " + e.getMessage());
+            }
+            addLog(SystemLog.OP_WRITE, WORKLOAD_SUGGESTION + ".json", SystemLog.STATUS_OK);
+        }
+    }
+
+    // ---- User Operations ----
     public List<User> getUsers() { return new ArrayList<>(users); }
 
-    /**
-     * 从内存列表与持久化存储中删除用户（不可对 {@link #getUsers()} 的副本调用 remove）。
-     */
     public boolean removeUserByUsername(String username) {
         if (username == null || username.trim().isEmpty()) return false;
         synchronized (initLock) {
@@ -631,7 +728,7 @@ public class DataStore {
 
     private boolean saveUsersQuietly() {
         try {
-            store.save(USERS, users);
+            saveList(USERS, users);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save users: " + e.getMessage());
@@ -641,7 +738,7 @@ public class DataStore {
 
     public boolean saveUsers() {
         try {
-            store.save(USERS, users);
+            saveList(USERS, users);
             return true;
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save users: " + e.getMessage());
@@ -650,10 +747,9 @@ public class DataStore {
         }
     }
 
-    public JsonFileStore getStore() { return store; }
+    public String getDataDir() { return dataDir; }
 
-    // ---- MO ↔ TA 留言 ----
-
+    // ---- MO/TA Messaging ----
     public synchronized void addMoTaMessage(MoTaMessage m) {
         if (m == null) return;
         motaMessages.add(m);
@@ -665,9 +761,6 @@ public class DataStore {
         return new ArrayList<>(motaMessages);
     }
 
-    /**
-     * 将某线程下收件人为 readerUsername 的留言标为已读。
-     */
     public synchronized void markMoTaThreadRead(String moUsername, String taApplicantId, String readerUsername) {
         if (moUsername == null || taApplicantId == null || readerUsername == null) return;
         boolean changed = false;
@@ -696,13 +789,12 @@ public class DataStore {
 
     private void saveMoTaMessagesQuietly() {
         try {
-            store.save(MOTA_MESSAGES, motaMessages);
+            saveList(MOTA_MESSAGES, motaMessages);
         } catch (IOException e) {
             System.err.println("[DataStore] Failed to save mota_messages: " + e.getMessage());
         }
     }
 
-    /** 按 applicantId 查找已绑定该档案的 TA 用户（若有） */
     public User findUserByApplicantId(String applicantId) {
         if (applicantId == null) return null;
         for (User u : users) {
@@ -711,7 +803,6 @@ public class DataStore {
         return null;
     }
 
-    /** 显示名与 postedBy 一致的首个 MO 账号（旧数据无 postedByUsername 时的回退） */
     public User findMoUserByPostedByLabel(String postedBy) {
         if (postedBy == null || postedBy.isEmpty()) return null;
         String t = postedBy.trim();
@@ -723,16 +814,9 @@ public class DataStore {
         return null;
     }
 
-    // ============================================================
-    // SystemConfig 懒加载（只读，不需要频繁刷新）
-    // ============================================================
-
-    private static final String SYSTEM_CONFIG = "system_config";
+    // ---- SystemConfig Lazy Loading ----
     private volatile SystemConfig systemConfig = null;
 
-    /**
-     * 获取系统配置（懒加载，配置变更时调用 reloadSystemConfig()）。
-     */
     public SystemConfig getSystemConfig() {
         if (systemConfig == null) {
             synchronized (initLock) {
@@ -744,14 +828,10 @@ public class DataStore {
         return systemConfig;
     }
 
-    /**
-     * 重新加载系统配置（当配置被修改时调用）。
-     */
     public void reloadSystemConfig() {
         try {
-            systemConfig = store.loadObject(SYSTEM_CONFIG, SystemConfig.class);
+            systemConfig = loadObject(SYSTEM_CONFIG, SystemConfig.class);
             if (systemConfig == null) {
-                // 配置不存在时创建默认配置
                 systemConfig = createDefaultSystemConfig();
             }
         } catch (Exception e) {
@@ -760,24 +840,24 @@ public class DataStore {
         }
     }
 
-    /**
-     * 创建默认系统配置（仅在配置文件损坏或不存在时使用）。
-     */
     private SystemConfig createDefaultSystemConfig() {
         SystemConfig cfg = new SystemConfig();
-        cfg.setAppVersion("2.0");
-        cfg.setBuildDate(java.time.LocalDate.now().toString());
-
+        cfg.setAppVersion("3.0");
+        cfg.setBuildDate(LocalDate.now().toString());
         SystemConfig.WorkloadConfig wc = new SystemConfig.WorkloadConfig(20, 20, "h/week");
         cfg.setWorkloadConfig(wc);
-
         SystemConfig.PositionDefaults pd = new SystemConfig.PositionDefaults(8, 2, "2026-04-30", "Admin");
         cfg.setPositionDefaults(pd);
-
         cfg.setSkillSuggestions(Arrays.asList(
             "Java", "Python", "JavaScript", "Git", "Agile", "SQL",
             "React", "Node.js", "Machine Learning", "Docker"
         ));
+        SystemConfig.DataTraceability dt = new SystemConfig.DataTraceability(
+            "positions.json", "applications.json", "applicants.json",
+            "workloads.json", "users.json", "system_logs.json",
+            "mota_messages.json", "workload_suggestion.json", "cv_uploads/"
+        );
+        cfg.setDataTraceability(dt);
         return cfg;
     }
 }

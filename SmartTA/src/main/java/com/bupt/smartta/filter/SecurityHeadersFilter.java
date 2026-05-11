@@ -6,18 +6,28 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 /**
- * 全局安全响应头 Filter。
- * 为所有 HTTP 响应添加安全相关的响应头，防止常见 Web 安全攻击。
+ * Global security response-header filter for all HTTP responses in the Smart-TA application.
  *
- * 已修复：
- * - CSP 策略收紧（移除 'unsafe-inline' 和 'unsafe-eval'）
- * - 添加 Referrer-Policy
+ * <p>This filter adds security-related HTTP headers to every response to mitigate common
+ * web vulnerabilities:</p>
+ * <ul>
+ *   <li>{@code X-Content-Type-Options}: prevents MIME-type sniffing</li>
+ *   <li>{@code X-Frame-Options}: prevents clickjacking (DENY)</li>
+ *   <li>{@code X-XSS-Protection}: XSS filter for legacy browsers</li>
+ *   <li>{@code Cache-Control / Pragma / Expires}: disables browser caching for sensitive pages</li>
+ *   <li>{@code Referrer-Policy}: controls referrer information sent to other origins</li>
+ *   <li>{@code Content-Security-Policy}: restricts resource loading to trusted origins</li>
+ * </ul>
+ *
+ * <p>The CSP permits inline styles and scripts (required by JSP pages that use many
+ * inline {@code <style>} and {@code <script>} blocks). See in-code comments for how
+ * to tighten the policy once external JS/CSS files are introduced.</p>
  */
 public class SecurityHeadersFilter implements Filter {
 
     @Override
     public void init(FilterConfig filterConfig) throws ServletException {
-        // 无需初始化配置
+        // No configuration needed
     }
 
     @Override
@@ -26,27 +36,26 @@ public class SecurityHeadersFilter implements Filter {
         HttpServletRequest request = (HttpServletRequest) req;
         HttpServletResponse response = (HttpServletResponse) res;
 
-        // 防止 MIME 类型 sniffing
+        // Prevent MIME type sniffing
         response.setHeader("X-Content-Type-Options", "nosniff");
 
-        // 防止 Clickjacking（禁止在 iframe 中嵌入）
+        // Prevent clickjacking (DENY prevents framing entirely)
         response.setHeader("X-Frame-Options", "DENY");
 
-        // XSS 保护（现代浏览器默认启用，此为兼容旧浏览器）
+        // XSS protection (modern browsers enable this by default; opt-in for legacy browsers)
         response.setHeader("X-XSS-Protection", "1; mode=block");
 
-        // 禁用浏览器缓存（敏感数据页面）
+        // Disable browser caching (sensitive data pages)
         response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
         response.setHeader("Pragma", "no-cache");
         response.setHeader("Expires", "0");
 
-        // Referrer-Policy：仅在同源请求时发送 Referer
+        // Referrer-Policy: only send referrer for same-origin requests
         response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
-        // 内容安全策略（CSP）
-        // JSP 页面大量使用内联 <style> / <script>，必须允许 'unsafe-inline'，
-        // 否则浏览器会拦截样式与脚本，页面呈“纯文本”、登录不可用。
-        // 若将来改为外链 JS/CSS 或 nonce，可再收紧 script-src / style-src。
+        // Content Security Policy (CSP)
+        // Inline styles and scripts are required because JSP pages use many inline blocks.
+        // See in-code comments for how to tighten the policy later.
         String csp = "default-src 'self'; " +
                 "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; " +
                 "font-src 'self' https://fonts.gstatic.com; " +
@@ -56,8 +65,8 @@ public class SecurityHeadersFilter implements Filter {
                 "frame-ancestors 'none';";
         response.setHeader("Content-Security-Policy", csp);
 
-        // 严格传输安全（仅当使用 HTTPS 时生效）
-        // 在生产环境取消注释：
+        // Strict Transport Security (only effective when HTTPS is in use)
+        // Uncomment in production:
         // response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
 
         chain.doFilter(req, res);
@@ -65,6 +74,6 @@ public class SecurityHeadersFilter implements Filter {
 
     @Override
     public void destroy() {
-        // 无需清理
+        // No cleanup needed
     }
 }

@@ -13,6 +13,25 @@ import java.io.IOException;
 import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * Handles user authentication and session management for the Smart-TA platform.
+ *
+ * <p>This servlet processes all authentication-related requests at {@code /auth/*},
+ * including login, registration, logout, and role switching. It enforces:
+ * <ul>
+ *   <li>Password complexity rules (minimum 8 characters, must contain both letters and numbers)</li>
+ *   <li>Email format validation</li>
+ *   <li>Session fixation prevention (new session created on each successful login)</li>
+ *   <li>CSRF token generation and validation for sensitive operations</li>
+ *   <li>Automatic TA applicant record creation on registration with the TA role</li>
+ * </ul>
+ * </p>
+ *
+ * <p>Demo accounts are pre-configured in {@code system_config.json}.</p>
+ *
+ * @see com.bupt.smartta.model.User
+ * @see com.bupt.smartta.util.DataStore
+ */
 public class AuthServlet extends HttpServlet {
 
     private final DataStore ds = DataStore.getInstance();
@@ -20,13 +39,20 @@ public class AuthServlet extends HttpServlet {
     private static final String CSRF_PARAM = "_csrf";
     private static final String CSRF_SESSION_ATTR = "csrfToken";
 
-    /** 至少 8 位，且同时包含字母与数字。 */
+    /** Password must be at least 8 characters and contain both letters and digits. */
     private static final Pattern PASSWORD_PATTERN =
             Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{8,}$");
 
+    /** Email format validation pattern. */
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+
     /**
-     * 统一的 HTML 转义方法（防止 XSS）。
-     * 在所有向 HTML 嵌入用户数据处使用此方法。
+     * Escapes HTML special characters to prevent Cross-Site Scripting (XSS).
+     * Used when embedding user-controlled data into HTML responses.
+     *
+     * @param s the string to escape (may be null)
+     * @return the escaped string, or an empty string if input is null
      */
     private String escHtml(String s) {
         if (s == null) return "";
@@ -199,13 +225,15 @@ public class AuthServlet extends HttpServlet {
 
         if (username == null || username.trim().isEmpty()
          || password == null || password.isEmpty()
-         || displayName == null || displayName.trim().isEmpty()) {
-            sendError(resp, "Username, password, and display name are required");
+         || displayName == null || displayName.trim().isEmpty()
+         || email == null || email.trim().isEmpty()) {
+            sendError(resp, "Username, password, display name and email are required");
             return;
         }
 
         username = username.trim();
         displayName = displayName.trim();
+        email = email.trim();
 
         if (username.length() < 3) {
             sendError(resp, "Username must be at least 3 characters");
@@ -227,6 +255,10 @@ public class AuthServlet extends HttpServlet {
             sendError(resp, "Username can only contain letters, numbers, and underscores");
             return;
         }
+        if (!EMAIL_PATTERN.matcher(email).matches()) {
+            sendError(resp, "Invalid email format. Please enter a valid email address (e.g., example@mail.com)");
+            return;
+        }
 
         if (ds.getUserByUsername(username) != null) {
             sendError(resp, "Username already exists");
@@ -245,7 +277,7 @@ public class AuthServlet extends HttpServlet {
         if (roles.isEmpty()) roles.add("TA");
 
         User user = new User(username, User.hashPassword(password), displayName, "");
-        user.setEmail(email != null ? email.trim() : "");
+        user.setEmail(email);
         for (String r : roles) user.addRole(r);
 
         ds.saveUser(user);
@@ -279,8 +311,15 @@ public class AuthServlet extends HttpServlet {
     }
 
     private void handleLogout(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        HttpSession session = req.getSession(false);
-        if (session != null) session.invalidate();
+        HttpSession oldSession = req.getSession(false);
+        if (oldSession != null) {
+            // 会话固定攻击防护：注销前使 session 失效
+            oldSession.invalidate();
+        }
+        // 防止缓存敏感页面
+        resp.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        resp.setHeader("Pragma", "no-cache");
+        resp.setHeader("Expires", "0");
         resp.getWriter().write("{\"success\":true,\"message\":\"Logged out successfully\"}");
     }
 
@@ -430,8 +469,41 @@ public class AuthServlet extends HttpServlet {
         ds.saveUser(user);
     }
 
-    /** 演示环境：不校验 CSRF，避免表单/请求格式不一致导致无法切换角色。 */
+    /**
+     * Validates the CSRF token carried in the request against the session-stored token,
+     * preventing Cross-Site Request Forgery attacks.
+     * The token is generated during login/registration and must be sent with
+     * state-changing requests via the {@code _csrf} parameter.
+     *
+     * @param req  the current HTTP request
+     * @param resp the current HTTP response
+     * @return {@code true} if the token is valid; {@code false} otherwise (response already committed)
+     * @throws IOException if writing to the response fails
+     */
     private boolean validateCsrf(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        HttpSession session = req.getSession(false);
+        if (session == null) {
+            sendError(resp, "Session expired, please login again");
+            return false;
+        }
+
+        String sessionToken = (String) session.getAttribute(CSRF_SESSION_ATTR);
+        if (sessionToken == null || sessionToken.isEmpty()) {
+            sendError(resp, "CSRF token missing, please refresh and login again");
+            return false;
+        }
+
+        String requestToken = req.getParameter(CSRF_PARAM);
+        if (requestToken == null || requestToken.isEmpty()) {
+            sendError(resp, "CSRF token missing from request");
+            return false;
+        }
+
+        if (!sessionToken.equals(requestToken)) {
+            sendError(resp, "Invalid CSRF token");
+            return false;
+        }
+
         return true;
     }
 
