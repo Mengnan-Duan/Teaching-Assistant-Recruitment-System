@@ -244,6 +244,19 @@ public class ApiServlet extends HttpServlet {
         return n;
     }
 
+    /**
+     * Returns the currently logged-in user and ensures the account is linked to an applicant profile.
+     * MO/TA messaging and profile pages rely on this linkage, so the check is centralized here.
+     */
+    private User requireLinkedApplicant(HttpServletRequest req, StringBuilder sb, String noProfileMessage) {
+        User me = ds.getUserByUsername(sessionUsername(req));
+        if (me == null || me.getApplicantId() == null || me.getApplicantId().isEmpty()) {
+            sb.append("{\"success\":false,\"message\":\"").append(esc(noProfileMessage)).append("\"}");
+            return null;
+        }
+        return me;
+    }
+
     // ============================================================
     // Utility: response output
     // ============================================================
@@ -1488,11 +1501,8 @@ public class ApiServlet extends HttpServlet {
      * Reads the current pending suggestion from DataStore, returns it if it belongs to the current TA.
      */
     private void handleGetWorkloadSuggestion(HttpServletRequest req, StringBuilder sb) {
-        User me = ds.getUserByUsername(sessionUsername(req));
-        if (me == null || me.getApplicantId() == null || me.getApplicantId().isEmpty()) {
-            sb.append("{\"hasSuggestion\":false,\"message\":\"No applicant profile linked.\"}");
-            return;
-        }
+        User me = requireLinkedApplicant(req, sb, "No applicant profile linked.");
+        if (me == null) return;
         String aid = me.getApplicantId();
         LLMService.RebalanceAdvice sugg = ds.getPendingWorkloadSuggestion();
         if (sugg == null || !aid.equalsIgnoreCase(sugg.targetApplicantId)) {
@@ -1516,11 +1526,8 @@ public class ApiServlet extends HttpServlet {
      * confirm=false: clears the pending suggestion only.
      */
     private void handleWorkloadSuggestionResponse(HttpServletRequest req, StringBuilder sb) {
-        User me = ds.getUserByUsername(sessionUsername(req));
-        if (me == null || me.getApplicantId() == null || me.getApplicantId().isEmpty()) {
-            sb.append("{\"success\":false,\"message\":\"No applicant profile linked.\"}");
-            return;
-        }
+        User me = requireLinkedApplicant(req, sb, "No applicant profile linked.");
+        if (me == null) return;
         String aid = me.getApplicantId();
         String actionParam = req.getParameter("action"); // "confirm" or "dismiss"
         boolean confirm = "confirm".equalsIgnoreCase(actionParam);
@@ -1654,11 +1661,8 @@ public class ApiServlet extends HttpServlet {
      * Returns position details + MO username/display name.
      */
     private void handleGetMyPositions(HttpServletRequest req, StringBuilder sb) {
-        User me = ds.getUserByUsername(sessionUsername(req));
-        if (me == null || me.getApplicantId() == null || me.getApplicantId().isEmpty()) {
-            sb.append("{\"success\":false,\"message\":\"No applicant profile linked\"}");
-            return;
-        }
+        User me = requireLinkedApplicant(req, sb, "No applicant profile linked");
+        if (me == null) return;
         String aid = me.getApplicantId();
         List<Application> acceptedApps = new ArrayList<>();
         for (Application a : ds.getApplications()) {
@@ -1757,11 +1761,8 @@ public class ApiServlet extends HttpServlet {
     }
 
     private void handleGetTaMoThreads(HttpServletRequest req, StringBuilder sb) {
-        User me = ds.getUserByUsername(sessionUsername(req));
-        if (me == null || me.getApplicantId() == null || me.getApplicantId().isEmpty()) {
-            sb.append("{\"success\":false,\"message\":\"No applicant profile linked\"}");
-            return;
-        }
+        User me = requireLinkedApplicant(req, sb, "No applicant profile linked");
+        if (me == null) return;
         String aid = me.getApplicantId();
         LinkedHashMap<String, String[]> moUserToInfo = new LinkedHashMap<>();
         // Collect all MOs for this TA's applications (including Accepted and Pending)
@@ -1801,11 +1802,8 @@ public class ApiServlet extends HttpServlet {
 
     private void handleGetTaMoMessages(HttpServletRequest req, StringBuilder sb) {
         String moUsername = req.getParameter("moUsername");
-        User me = ds.getUserByUsername(sessionUsername(req));
-        if (me == null || me.getApplicantId() == null || me.getApplicantId().isEmpty()) {
-            sb.append("{\"success\":false,\"message\":\"No applicant profile\"}");
-            return;
-        }
+        User me = requireLinkedApplicant(req, sb, "No applicant profile");
+        if (me == null) return;
         if (moUsername == null || moUsername.trim().isEmpty()) {
             sb.append("{\"success\":false,\"message\":\"Missing moUsername\"}");
             return;
