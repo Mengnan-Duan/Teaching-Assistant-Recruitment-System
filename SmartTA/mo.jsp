@@ -230,6 +230,9 @@ tr:last-child td { border-bottom:none; }
                     <h2>My Modules</h2>
                     <span id="modulesCount" class="pill-count">0</span>
                 </div>
+                <div class="filter-bar">
+                    <input type="text" id="moduleSearch" placeholder="Search by code, name, or skill..." oninput="loadMyModules()" />
+                </div>
                 <p style="font-size:0.78rem;color:var(--muted);margin-bottom:14px;">View and manage your assigned modules. Click Edit to modify details or Delete to remove.</p>
                 <div id="myModulesList"><div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:20px">Loading…</div></div>
             </div>
@@ -492,6 +495,11 @@ function renderDataTrace() {
         '<div>&#9679; Quotas: <code>quotas.json</code></div>';
 }
 
+function getModuleSearchValue() {
+    var input = document.getElementById("moduleSearch");
+    return input ? input.value.trim().toLowerCase() : "";
+}
+
 async function moCheckSession() {
     try {
         let res = await fetch("auth/session");
@@ -610,17 +618,24 @@ function renderSidebarStats() {
     document.getElementById("statAvgScore").textContent = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : "--";
 }
 
-async function loadMyModules() {
+async async function loadMyModules() {
     let el = document.getElementById("myModulesList");
     try {
         let res = await fetch("api/moPositions");
         if (!res.ok) { el.innerHTML = "<span style=color:var(--accent)>Failed to load modules.</span>"; return; }
         let j = await res.json();
         let modules = j.moPositions || [];
+        let keyword = getModuleSearchValue();
+        if (keyword) {
+            modules = modules.filter(function(m) {
+                let text = [m.code, m.name, m.deadline, m.status, m.requiredSkills, (m.skillsList || []).join(",")].join(" ").toLowerCase();
+                return text.indexOf(keyword) >= 0;
+            });
+        }
         document.getElementById("modulesCount").textContent = modules.length;
 
         if (!modules.length) {
-            el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">No modules assigned yet. Use "Post Position" to create your first module.</p>';
+            el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">No modules match your search. Try a different keyword or post a new position.</p>';
             return;
         }
 
@@ -939,7 +954,7 @@ function saveDraft() {
     showToast("Draft saved successfully", "info");
 }
 
-async function updateStatus(appId, status) {
+async async function updateStatus(appId, status) {
     let confirmMsg = status === "Accepted"
         ? "Are you sure you want to accept this applicant?"
         : "Are you sure you want to reject this applicant?";
