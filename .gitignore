@@ -1,0 +1,12 @@
+# Java / Maven build output
+SmartTA/target/
+**/target/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# OS files
+Thumbs.db
+.DS_Store
