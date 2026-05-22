@@ -33,15 +33,12 @@
     }
 %>
 <!DOCTYPE html>
-<html lang="en" class="smartta-shell">
+<html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login · Smart-TA</title>
-    <link rel="icon" href="<%= request.getContextPath() %>/favicon.ico" type="image/x-icon" />
-    <link rel="icon" href="<%= request.getContextPath() %>/favicon.svg" type="image/svg+xml" />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/smartta-shell.css" />
     <style>
 :root {
     --ink:#1a1a2e; --surface:#f8f7f4; --card:#ffffff;
@@ -57,7 +54,7 @@
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
-    font-family:var(--font-body);
+    font-family:var(--font-body); background:var(--surface);
     color:var(--ink); min-height:100vh; display:flex;
     align-items:center; justify-content:center;
 }
@@ -207,25 +204,25 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 .form-footer a { color:var(--primary); text-decoration:none; font-weight:600; cursor:pointer; }
 .form-footer a:hover { text-decoration:underline; }
 
+.demo-accounts {
+    margin-top:24px; padding:14px 16px;
+    background:#f0f4f8; border-radius:var(--radius-sm);
+    border:1px dashed var(--border);
+}
+.demo-accounts h4 { font-size:0.75rem; font-weight:700; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em; }
+.demo-account {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:5px 0; font-size:0.78rem;
+}
+.demo-account .demo-role { font-weight:700; color:var(--primary); }
+.demo-account .demo-creds { color:var(--muted); font-family:monospace; font-size:0.72rem; }
+
 .error-box {
     display:none; padding:12px 16px; border-radius:var(--radius-sm);
     background:var(--accent-soft); border-left:4px solid var(--accent);
     font-size:0.82rem; color:var(--accent); font-weight:500;
 }
 .error-box.show { display:flex; align-items:center; gap:8px; }
-
-.success-box {
-    display:none; padding:12px 16px; border-radius:var(--radius-sm);
-    background:var(--success-soft); border-left:4px solid var(--success);
-    font-size:0.82rem; color:#1d6f65; font-weight:500;
-}
-.success-box.show { display:flex; align-items:center; gap:8px; }
-.success-box .success-icon {
-    flex-shrink:0; width:22px; height:22px; border-radius:50%;
-    background:var(--success); color:#fff;
-    display:flex; align-items:center; justify-content:center;
-    font-size:0.75rem; font-weight:800;
-}
 
 /* Demo badge */
 .demo-badge {
@@ -243,12 +240,12 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 }
 </style>
 </head>
-<body class="smartta-shell">
+<body>
 
 <div class="page-wrapper">
     <!-- LEFT BRAND SIDE -->
     <div class="brand-side">
-        <div class="demo-badge" id="versionBadge">v2.0</div>
+        <div class="demo-badge">v2.0</div>
         <div class="brand-logo">Smart<span>TA</span></div>
         <p class="brand-tagline">AI-Powered TA Recruitment System<br/>BUPT International School · EBU6304 Group 37</p>
 
@@ -272,7 +269,7 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
         </div>
 
         <div class="brand-footer">
-            <span id="brandVersion">Smart-TA v2.0 &middot; Mid-Term Demo</span><br/>
+            Smart-TA v2.0 &middot; Mid-Term Demo<br/>
             Data stored in: /webapps/SmartTA/data/*.json
         </div>
     </div>
@@ -284,14 +281,10 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
             <button class="form-toggle-btn" id="btn-register" onclick="showRegister()">Register</button>
         </div>
 
-        <!-- ERROR / SUCCESS (same position, mutually exclusive) -->
+        <!-- ERROR BOX -->
         <div class="error-box" id="errorBox">
             <span>&#9888;&#65039;</span>
             <span id="errorMsg"></span>
-        </div>
-        <div class="success-box" id="successBox" aria-live="polite">
-            <span class="success-icon" aria-hidden="true">&#10003;</span>
-            <span id="successMsg"></span>
         </div>
 
         <!-- LOGIN FORM -->
@@ -370,7 +363,7 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
                 <label>Password</label>
                 <div class="field-input">
                     <span class="input-icon">&#128273;</span>
-                    <input type="password" id="regPassword" placeholder="8+ chars, letters &amp; numbers" autocomplete="new-password" />
+                    <input type="password" id="regPassword" placeholder="At least 4 characters" autocomplete="new-password" />
                     <button type="button" class="pw-toggle-btn" id="regPwToggle" aria-pressed="false" aria-label="Show password" title="Show password">
                         <svg class="pw-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                         <svg class="pw-eye-shut" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -409,49 +402,39 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
         <div class="form-footer">
             <span id="footerText">Don't have an account? <a onclick="showRegister()">Register here</a></span>
         </div>
+
+        <!-- Demo accounts -->
+        <div class="demo-accounts">
+            <h4>Demo Accounts</h4>
+            <div class="demo-account">
+                <span class="demo-role">Admin</span>
+                <span class="demo-creds">admin / admin123</span>
+            </div>
+            <div class="demo-account">
+                <span class="demo-role">MO</span>
+                <span class="demo-creds">mosmith / mo123</span>
+            </div>
+            <div class="demo-account">
+                <span class="demo-role">TA</span>
+                <span class="demo-creds">zhangwei / ta123</span>
+            </div>
+            <div class="demo-account">
+                <span class="demo-role">TA</span>
+                <span class="demo-creds">limei / ta123</span>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
-function clearRegisterForm() {
-    document.getElementById("regDisplayName").value = "";
-    document.getElementById("regUsername").value = "";
-    document.getElementById("regEmail").value = "";
-    document.getElementById("regPassword").value = "";
-    document.querySelectorAll("#regRoleSelector .role-option").forEach(el => {
-        el.classList.remove("selected");
-        el.querySelector("input").checked = false;
-    });
-}
-var APP_CTX = "<%= request.getContextPath() %>";
-(async function() {
-    try {
-        let res = await fetch(APP_CTX + "/api?action=config");
-        if (res.ok) {
-            let cfg = await res.json();
-            if (cfg.appVersion) {
-                let vb = document.getElementById("versionBadge");
-                if (vb) vb.textContent = "v" + cfg.appVersion;
-                let bv = document.getElementById("brandVersion");
-                if (bv) bv.textContent = "Smart-TA v" + cfg.appVersion;
-            }
-        }
-    } catch(e) {
-        console.warn("[SmartTA] Failed to load system config:", e);
-    }
-})();
-
 // ---- Form toggle ----
-/** @param opts {{keepSuccess?:boolean}} Keep the green success bar when switching to login page after successful registration */
-function showLogin(opts) {
-    var keepSuccess = opts && opts.keepSuccess;
+function showLogin() {
     document.getElementById("loginForm").style.display = "flex";
     document.getElementById("registerForm").style.display = "none";
     document.getElementById("btn-login").className = "form-toggle-btn active";
     document.getElementById("btn-register").className = "form-toggle-btn";
     document.getElementById("footerText").innerHTML = 'Don\'t have an account? <a onclick="showRegister()\">Register here</a>';
     hideError();
-    if (!keepSuccess) hideSuccess();
 }
 function showRegister() {
     document.getElementById("loginForm").style.display = "none";
@@ -460,8 +443,6 @@ function showRegister() {
     document.getElementById("btn-register").className = "form-toggle-btn active";
     document.getElementById("footerText").innerHTML = 'Already have an account? <a onclick="showLogin()\">Sign in</a>';
     hideError();
-    hideSuccess();
-    clearRegisterForm();
 }
 
 // Auto-select role from query param
@@ -497,28 +478,18 @@ document.querySelectorAll("#regRoleSelector .role-option").forEach(el => {
     });
 });
 
-// ---- Error / Success banners ----
+// ---- Error ----
 function showError(msg) {
-    hideSuccess();
     document.getElementById("errorMsg").textContent = msg;
     document.getElementById("errorBox").classList.add("show");
 }
 function hideError() {
     document.getElementById("errorBox").classList.remove("show");
 }
-function showSuccess(msg) {
-    hideError();
-    document.getElementById("successMsg").textContent = msg;
-    document.getElementById("successBox").classList.add("show");
-}
-function hideSuccess() {
-    document.getElementById("successBox").classList.remove("show");
-}
 
 // ---- Login ----
 async function doLogin() {
     hideError();
-    hideSuccess();
     let username = document.getElementById("loginUsername").value.trim();
     let password = document.getElementById("loginPassword").value;
     let roleEl = document.querySelector("#loginRoleSelector .role-option.selected");
@@ -537,7 +508,7 @@ async function doLogin() {
         params.append("username", username);
         params.append("password", password);
         params.append("role", role);
-        let res = await fetch(APP_CTX + "/auth/login", { method: "POST", body: params, headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+        let res = await fetch("/SmartTA/auth/login", { method: "POST", body: params, headers: { "Content-Type": "application/x-www-form-urlencoded" } });
         let text = await res.text();
         let json;
         try {
@@ -548,8 +519,6 @@ async function doLogin() {
         }
 
         if (json.success) {
-            // Save session data for subsequent pages
-            sessionStorage.setItem("csrfToken", json.csrfToken || "");
             // Redirect to the appropriate dashboard based on role
             let redirectUrl = "ta.jsp";
             if (role === "MO") redirectUrl = "mo.jsp";
@@ -569,7 +538,6 @@ async function doLogin() {
 // ---- Register ----
 async function doRegister() {
     hideError();
-    hideSuccess();
     let displayName = document.getElementById("regDisplayName").value.trim();
     let username = document.getElementById("regUsername").value.trim();
     let email = document.getElementById("regEmail").value.trim();
@@ -581,17 +549,7 @@ async function doRegister() {
     if (!username) { showError("Please enter a username"); return; }
     if (username.length < 3) { showError("Username must be at least 3 characters"); return; }
     if (!password) { showError("Please enter a password"); return; }
-    if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password)) {
-        showError("Password: at least 8 characters, with both letters and numbers");
-        return;
-    }
-   // 邮箱格式验证
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-    showError("Please enter a valid email address");
-    isSubmitting = false;
-    return;
-}
+    if (password.length < 4) { showError("Password must be at least 4 characters"); return; }
     if (!email) { showError("Please enter your email"); return; }
     if (roles.length === 0) { showError("Please select at least one role"); return; }
 
@@ -606,7 +564,7 @@ async function doRegister() {
         params.append("email", email);
         params.append("password", password);
         params.append("roles", roles.join(","));
-        let res = await fetch(APP_CTX + "/auth/register", {
+        let res = await fetch("/SmartTA/auth/register", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
             body: params,
@@ -622,12 +580,10 @@ async function doRegister() {
         }
 
         if (json.success) {
-            sessionStorage.setItem("csrfToken", json.csrfToken || "");
-            showSuccess("Account created successfully. You can sign in below with your username.");
+            showError("");
+            showToast("Account created successfully! You can now sign in.", "success");
             document.getElementById("loginUsername").value = username;
             document.getElementById("loginPassword").value = "";
-            clearRegisterForm();
-	    showLogin({ keepSuccess: true });
             document.getElementById("loginPassword").focus();
         } else {
             showError(json.error || json.message || "Registration failed");
@@ -665,23 +621,6 @@ function wirePasswordToggle(inputId, btnId) {
 }
 wirePasswordToggle("loginPassword", "loginPwToggle");
 wirePasswordToggle("regPassword", "regPwToggle");
-
-// ---- Toast ----
-var toastContainer = document.createElement("div");
-toastContainer.id = "toastContainer";
-toastContainer.style.cssText = "position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;";
-document.body.appendChild(toastContainer);
-
-function showToast(msg, type) {
-    type = type || "success";
-    var icons = { success:"&#9989;", error:"&#10060;", warn:"&#9888;&#65039;", info:"&#128712;" };
-    var toast = document.createElement("div");
-    toast.style.cssText = "display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:8px;font-size:0.85rem;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,0.15);animation:slideIn 0.25s ease;max-width:360px;background:#fff;";
-    toast.style.borderLeft = "4px solid " + ({"success":"#2a9d8f","error":"#e63946","warn":"#e9c46a","info":"#457b9d"})[type];
-    toast.innerHTML = '<span>' + icons[type] + '</span><span>' + msg + '</span><button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;margin-left:auto;color:#8d99ae;">&times;</button>';
-    toastContainer.appendChild(toast);
-    setTimeout(function() { if(toast.parentElement) toast.remove(); }, 4000);
-}
 </script>
 
 </body>
