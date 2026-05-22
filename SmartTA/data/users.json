@@ -31,14 +31,6 @@
   "roles" : [ "MO" ],
   "applicantId" : null
 }, {
-  "username" : "WangHao",
-  "passwordHash" : "3bdf79b8d67521d5fe2d4ed9b113471cd3a4d996d4574d4f9cf145cb132242b0",
-  "displayName" : "Wang Hao",
-  "email" : "1234@qq.com",
-  "createdAt" : "2026-04-12",
-  "roles" : [ "TA" ],
-  "applicantId" : "A002"
-}, {
   "username" : "admin",
   "passwordHash" : "a3bbaf499dcee22a390ba415d44bb68a69b23726eb5ac9b377d05ede3b302357",
   "displayName" : "Yangfan Zhou",
@@ -62,4 +54,28 @@
   "createdAt" : "2026-05-11",
   "roles" : [ "ADMIN" ],
   "applicantId" : null
+}, {
+  "username" : "wanghao",
+  "passwordHash" : "a3bbaf499dcee22a390ba415d44bb68a69b23726eb5ac9b377d05ede3b302357",
+  "displayName" : "Wanghao",
+  "email" : "2023213281@bupt.edu.cn",
+  "createdAt" : "2026-05-18",
+  "roles" : [ "TA" ],
+  "applicantId" : "A002"
+}, {
+  "username" : "lisi",
+  "passwordHash" : "a3bbaf499dcee22a390ba415d44bb68a69b23726eb5ac9b377d05ede3b302357",
+  "displayName" : "Lisi",
+  "email" : "2023213281@bupt.edu.cn",
+  "createdAt" : "2026-05-20",
+  "roles" : [ "TA" ],
+  "applicantId" : "A003"
+}, {
+  "username" : "wangwu",
+  "passwordHash" : "a3bbaf499dcee22a390ba415d44bb68a69b23726eb5ac9b377d05ede3b302357",
+  "displayName" : "Wangwu",
+  "email" : "2023213281@bupt.edu.cn",
+  "createdAt" : "2026-05-21",
+  "roles" : [ "TA" ],
+  "applicantId" : "A004"
 } ]

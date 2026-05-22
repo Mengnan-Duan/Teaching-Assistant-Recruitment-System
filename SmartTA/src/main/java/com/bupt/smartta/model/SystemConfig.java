@@ -252,25 +252,18 @@ public class SystemConfig implements Serializable {
         private String users;
         /** Path to system_logs.json. */
         private String logs;
-        /** Path to mota_messages.json. */
-        private String motaMessages;
-        /** Path to workload_suggestion.json. */
-        private String workloadSuggestion;
         /** Path to cv_uploads/ directory. */
         private String cvs;
 
         public DataTraceability() {}
         public DataTraceability(String positions, String applications, String applicants,
-                              String workloads, String users, String logs,
-                              String motaMessages, String workloadSuggestion, String cvs) {
+                              String workloads, String users, String logs, String cvs) {
             this.positions = positions;
             this.applications = applications;
             this.applicants = applicants;
             this.workloads = workloads;
             this.users = users;
             this.logs = logs;
-            this.motaMessages = motaMessages;
-            this.workloadSuggestion = workloadSuggestion;
             this.cvs = cvs;
         }
 
@@ -286,10 +279,6 @@ public class SystemConfig implements Serializable {
         public void setUsers(String users) { this.users = users; }
         public String getLogs() { return logs; }
         public void setLogs(String logs) { this.logs = logs; }
-        public String getMotaMessages() { return motaMessages; }
-        public void setMotaMessages(String motaMessages) { this.motaMessages = motaMessages; }
-        public String getWorkloadSuggestion() { return workloadSuggestion; }
-        public void setWorkloadSuggestion(String workloadSuggestion) { this.workloadSuggestion = workloadSuggestion; }
         public String getCvs() { return cvs; }
         public void setCvs(String cvs) { this.cvs = cvs; }
     }

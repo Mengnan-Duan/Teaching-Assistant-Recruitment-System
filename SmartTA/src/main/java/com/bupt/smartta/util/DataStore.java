@@ -842,7 +842,7 @@ public class DataStore {
 
     private SystemConfig createDefaultSystemConfig() {
         SystemConfig cfg = new SystemConfig();
-        cfg.setAppVersion("3.0");
+        cfg.setAppVersion("2.0");
         cfg.setBuildDate(LocalDate.now().toString());
         SystemConfig.WorkloadConfig wc = new SystemConfig.WorkloadConfig(20, 20, "h/week");
         cfg.setWorkloadConfig(wc);
@@ -852,12 +852,6 @@ public class DataStore {
             "Java", "Python", "JavaScript", "Git", "Agile", "SQL",
             "React", "Node.js", "Machine Learning", "Docker"
         ));
-        SystemConfig.DataTraceability dt = new SystemConfig.DataTraceability(
-            "positions.json", "applications.json", "applicants.json",
-            "workloads.json", "users.json", "system_logs.json",
-            "mota_messages.json", "workload_suggestion.json", "cv_uploads/"
-        );
-        cfg.setDataTraceability(dt);
         return cfg;
     }
 }
